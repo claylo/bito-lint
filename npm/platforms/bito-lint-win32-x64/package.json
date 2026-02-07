@@ -1,0 +1,13 @@
+{
+  "name": "@claylo/bito-lint-win32-x64",
+  "version": "0.1.0",
+  "description": "Quality gate tooling for building-in-the-open artifacts (win32-x64 binary)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/claylo/bito-lint"
+  },
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "files": ["bin/"]
+}

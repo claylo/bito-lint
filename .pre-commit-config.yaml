@@ -1,0 +1,41 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+# Install: pip install pre-commit && pre-commit install
+repos:
+  # Rust formatting
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all --
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+  # Rust linting
+  - repo: local
+    hooks:
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets --all-features -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+  # Security/license check
+  - repo: local
+    hooks:
+      - id: cargo-deny
+        name: cargo deny
+        entry: cargo deny check
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+  # Conventional commits (optional - for commit-msg hook)
+  # Uncomment if you want commit message validation
+  # - repo: https://github.com/compilerla/conventional-pre-commit
+  #   rev: v3.0.0
+  #   hooks:
+  #     - id: conventional-pre-commit
+  #       stages: [commit-msg]
