@@ -2,18 +2,15 @@
 #![deny(unsafe_code)]
 
 use anyhow::Context;
-use clap::Parser;
-use tracing::debug;
 use bito_lint::{Cli, Commands, commands};
 use bito_lint_core::config::ConfigLoader;
-
+use clap::Parser;
+use tracing::debug;
 
 mod observability;
 
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-let cli = Cli::parse();
+fn main() -> anyhow::Result<()> {
+    let cli = Cli::parse();
     cli.color.apply();
 
     if let Some(ref dir) = cli.chdir {
@@ -22,25 +19,32 @@ let cli = Cli::parse();
     }
 
     let cwd = std::env::current_dir().context("failed to determine current directory")?;
-    let cwd = camino::Utf8PathBuf::try_from(cwd)
-        .map_err(|e| anyhow::anyhow!("current directory is not valid UTF-8: {}", e.into_path_buf().display()))?;
+    let cwd = camino::Utf8PathBuf::try_from(cwd).map_err(|e| {
+        anyhow::anyhow!(
+            "current directory is not valid UTF-8: {}",
+            e.into_path_buf().display()
+        )
+    })?;
     let mut loader = ConfigLoader::new().with_project_search(&cwd);
     if let Some(ref config_path) = cli.config {
-        let config_path = camino::Utf8PathBuf::try_from(config_path.clone())
-            .map_err(|e| anyhow::anyhow!("config path is not valid UTF-8: {}", e.into_path_buf().display()))?;
+        let config_path = camino::Utf8PathBuf::try_from(config_path.clone()).map_err(|e| {
+            anyhow::anyhow!(
+                "config path is not valid UTF-8: {}",
+                e.into_path_buf().display()
+            )
+        })?;
         loader = loader.with_file(&config_path);
     }
     let config = loader.load().context("failed to load configuration")?;
 
-
     let obs_config = observability::ObservabilityConfig::from_env_with_overrides(
-config
+        config
             .log_dir
             .as_ref()
             .map(|dir| dir.as_std_path().to_path_buf()),
-);
-let env_filter = observability::env_filter(cli.quiet, cli.verbose, config.log_level.as_str());
-let _guard = observability::init_observability(&obs_config, env_filter)
+    );
+    let env_filter = observability::env_filter(cli.quiet, cli.verbose, config.log_level.as_str());
+    let _guard = observability::init_observability(&obs_config, env_filter)
         .context("failed to initialize logging/tracing")?;
 
     debug!(
@@ -54,15 +58,34 @@ let _guard = observability::init_observability(&obs_config, env_filter)
 
     // Execute command
     let result = match cli.command {
-Commands::Doctor(args) => commands::doctor::cmd_doctor(args, cli.json, &cwd),
+        Commands::Analyze(args) => commands::analyze::cmd_analyze(
+            args,
+            cli.json,
+            config.style_min_score,
+            config.max_grade,
+            config.passive_max_percent,
+        ),
+        Commands::Tokens(args) => commands::tokens::cmd_tokens(args, cli.json, config.token_budget),
+        Commands::Readability(args) => {
+            commands::readability::cmd_readability(args, cli.json, config.max_grade)
+        }
+        Commands::Completeness(args) => {
+            commands::completeness::cmd_completeness(args, cli.json, config.templates.as_ref())
+        }
+        Commands::Grammar(args) => {
+            commands::grammar::cmd_grammar(args, cli.json, config.passive_max_percent)
+        }
+        Commands::Doctor(args) => commands::doctor::cmd_doctor(args, cli.json, &cwd),
         Commands::Info(args) => commands::info::cmd_info(args, cli.json, &config, &cwd),
-
-        Commands::Serve(args) => commands::serve::cmd_serve(args).await,
-
+        #[cfg(feature = "mcp")]
+        Commands::Serve(args) => {
+            let rt = tokio::runtime::Runtime::new()
+                .context("failed to create async runtime for MCP server")?;
+            rt.block_on(commands::serve::cmd_serve(args))
+        }
     };
     if let Err(ref err) = result {
         tracing::error!(error = %err, "fatal error");
     }
     result
-
 }

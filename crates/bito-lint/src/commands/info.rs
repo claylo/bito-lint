@@ -7,7 +7,6 @@ use tracing::{debug, instrument};
 
 use bito_lint_core::config::{self, Config};
 
-
 /// Arguments for the `info` subcommand.
 #[derive(Args, Debug, Default)]
 pub struct InfoArgs {
@@ -41,7 +40,6 @@ impl PackageInfo {
     }
 }
 
-
 #[derive(Serialize)]
 struct ConfigInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -49,16 +47,33 @@ struct ConfigInfo {
     log_level: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     log_dir: Option<String>,
-
+    #[serde(skip_serializing_if = "Option::is_none")]
+    token_budget: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_grade: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    passive_max_percent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    style_min_score: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    custom_templates: Option<Vec<String>>,
 }
 
 impl ConfigInfo {
     fn from_config(config: &Config, cwd: &camino::Utf8Path) -> Self {
+        let custom_templates = config
+            .templates
+            .as_ref()
+            .map(|t| t.keys().cloned().collect());
         Self {
             config_file: config::find_project_config(cwd).map(|p| p.to_string()),
             log_level: config.log_level.as_str().to_string(),
             log_dir: config.log_dir.as_ref().map(|p| p.to_string()),
-
+            token_budget: config.token_budget,
+            max_grade: config.max_grade,
+            passive_max_percent: config.passive_max_percent,
+            style_min_score: config.style_min_score,
+            custom_templates,
         }
     }
 }
@@ -70,7 +85,6 @@ struct FullInfo {
     config: ConfigInfo,
 }
 
-
 /// Print package information
 ///
 /// # Arguments
@@ -78,13 +92,15 @@ struct FullInfo {
 /// * `config` - Loaded configuration
 /// * `cwd` - Current working directory for config discovery
 #[instrument(name = "cmd_info", skip_all, fields(json_output))]
-pub fn cmd_info(_args: InfoArgs, global_json: bool, config: &Config, cwd: &camino::Utf8Path) -> anyhow::Result<()> {
-let info = PackageInfo::new();
+pub fn cmd_info(
+    _args: InfoArgs,
+    global_json: bool,
+    config: &Config,
+    cwd: &camino::Utf8Path,
+) -> anyhow::Result<()> {
+    let info = PackageInfo::new();
 
-    debug!(
-        json_output = global_json,
-        "executing info command"
-    );
+    debug!(json_output = global_json, "executing info command");
 
     let config_info = ConfigInfo::from_config(config, cwd);
     let full_info = FullInfo {
@@ -95,7 +111,11 @@ let info = PackageInfo::new();
     if global_json {
         println!("{}", serde_json::to_string_pretty(&full_info)?);
     } else {
-        println!("{} {}", full_info.package.name.bold(), full_info.package.version.green());
+        println!(
+            "{} {}",
+            full_info.package.name.bold(),
+            full_info.package.version.green()
+        );
         if !full_info.package.description.is_empty() {
             println!("{}", full_info.package.description);
         }
@@ -103,10 +123,18 @@ let info = PackageInfo::new();
             println!("{}: {}", "License".dimmed(), full_info.package.license);
         }
         if !full_info.package.repository.is_empty() {
-            println!("{}: {}", "Repository".dimmed(), full_info.package.repository.cyan());
+            println!(
+                "{}: {}",
+                "Repository".dimmed(),
+                full_info.package.repository.cyan()
+            );
         }
         if !full_info.package.homepage.is_empty() {
-            println!("{}: {}", "Homepage".dimmed(), full_info.package.homepage.cyan());
+            println!(
+                "{}: {}",
+                "Homepage".dimmed(),
+                full_info.package.homepage.cyan()
+            );
         }
 
         // Configuration section
@@ -122,16 +150,42 @@ let info = PackageInfo::new();
             println!("{}: {}", "Log directory".dimmed(), dir);
         }
 
+        // Quality gate defaults
+        println!();
+        println!("{}", "Quality Gates".bold().underline());
+        print_opt("Token budget", &full_info.config.token_budget);
+        print_opt_f64("Max grade", &full_info.config.max_grade);
+        print_opt_f64("Passive max %", &full_info.config.passive_max_percent);
+        print_opt("Style min score", &full_info.config.style_min_score);
+        if let Some(ref templates) = full_info.config.custom_templates {
+            println!("{}: {}", "Custom templates".dimmed(), templates.join(", "));
+        }
     }
 
-
     Ok(())
+}
+
+/// Print an optional numeric value or "(not set)".
+fn print_opt<T: std::fmt::Display>(label: &str, value: &Option<T>) {
+    use owo_colors::OwoColorize;
+    match value {
+        Some(v) => println!("{}: {}", label.dimmed(), v),
+        None => println!("{}: {}", label.dimmed(), "(not set)".dimmed()),
+    }
+}
+
+/// Print an optional f64 value or "(not set)".
+fn print_opt_f64(label: &str, value: &Option<f64>) {
+    use owo_colors::OwoColorize;
+    match value {
+        Some(v) => println!("{}: {:.1}", label.dimmed(), v),
+        None => println!("{}: {}", label.dimmed(), "(not set)".dimmed()),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     fn test_config() -> Config {
         Config::default()
@@ -159,5 +213,4 @@ mod tests {
         assert!(info.config_file.is_none());
         assert_eq!(info.log_level, "info");
     }
-
 }

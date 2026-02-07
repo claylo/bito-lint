@@ -17,8 +17,8 @@
 
 pub mod commands;
 
+#[cfg(feature = "mcp")]
 pub mod server;
-
 
 use clap::{CommandFactory, Parser, Subcommand};
 use std::path::PathBuf;
@@ -93,6 +93,20 @@ pub struct Cli {
 /// Available subcommands for the CLI.
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Run comprehensive writing analysis
+    Analyze(commands::analyze::AnalyzeArgs),
+
+    /// Count tokens in a file
+    Tokens(commands::tokens::TokensArgs),
+
+    /// Score readability (Flesch-Kincaid Grade Level)
+    Readability(commands::readability::ReadabilityArgs),
+
+    /// Check document completeness against a template
+    Completeness(commands::completeness::CompletenessArgs),
+
+    /// Check grammar and passive voice
+    Grammar(commands::grammar::GrammarArgs),
 
     /// Diagnose configuration and environment
     Doctor(commands::doctor::DoctorArgs),
@@ -101,8 +115,8 @@ pub enum Commands {
     Info(commands::info::InfoArgs),
 
     /// Start MCP (Model Context Protocol) server on stdio
+    #[cfg(feature = "mcp")]
     Serve(commands::serve::ServeArgs),
-
 }
 
 /// Returns the clap command for documentation generation

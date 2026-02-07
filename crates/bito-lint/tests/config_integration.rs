@@ -74,16 +74,8 @@ fn dotfile_takes_precedence_over_regular_name() {
     let tmp = TempDir::new().unwrap();
 
     // Both configs exist
-    fs::write(
-        tmp.path().join(".bito-lint.toml"),
-        r#"log_level = "debug""#,
-    )
-    .unwrap();
-    fs::write(
-        tmp.path().join("bito-lint.toml"),
-        r#"log_level = "error""#,
-    )
-    .unwrap();
+    fs::write(tmp.path().join(".bito-lint.toml"), r#"log_level = "debug""#).unwrap();
+    fs::write(tmp.path().join("bito-lint.toml"), r#"log_level = "error""#).unwrap();
 
     // Should use the dotfile (debug), not the regular one (error)
     // The test passes if the CLI runs successfully with either config
@@ -174,18 +166,10 @@ fn closer_config_takes_precedence() {
     fs::create_dir_all(&sub_dir).unwrap();
 
     // Parent config
-    fs::write(
-        tmp.path().join(".bito-lint.toml"),
-        r#"log_level = "error""#,
-    )
-    .unwrap();
+    fs::write(tmp.path().join(".bito-lint.toml"), r#"log_level = "error""#).unwrap();
 
     // Child config (should win)
-    fs::write(
-        sub_dir.join(".bito-lint.toml"),
-        r#"log_level = "debug""#,
-    )
-    .unwrap();
+    fs::write(sub_dir.join(".bito-lint.toml"), r#"log_level = "debug""#).unwrap();
 
     // Run from child directory - should use child config
     cmd()
@@ -199,16 +183,8 @@ fn toml_preferred_over_yaml_in_same_directory() {
     let tmp = TempDir::new().unwrap();
 
     // TOML is first in extension preference order
-    fs::write(
-        tmp.path().join(".bito-lint.toml"),
-        r#"log_level = "debug""#,
-    )
-    .unwrap();
-    fs::write(
-        tmp.path().join(".bito-lint.yaml"),
-        r#"log_level: error"#,
-    )
-    .unwrap();
+    fs::write(tmp.path().join(".bito-lint.toml"), r#"log_level = "debug""#).unwrap();
+    fs::write(tmp.path().join(".bito-lint.yaml"), r#"log_level: error"#).unwrap();
 
     // Should succeed with the TOML config
     cmd()
@@ -255,11 +231,7 @@ fn invalid_yaml_config_shows_error() {
 #[test]
 fn invalid_json_config_shows_error() {
     let tmp = TempDir::new().unwrap();
-    fs::write(
-        tmp.path().join(".bito-lint.json"),
-        "{not valid json}",
-    )
-    .unwrap();
+    fs::write(tmp.path().join(".bito-lint.json"), "{not valid json}").unwrap();
 
     cmd()
         .args(["-C", tmp.path().to_str().unwrap(), "info"])
@@ -302,11 +274,7 @@ fn git_boundary_stops_config_search() {
     fs::create_dir_all(&src).unwrap();
 
     // Config in parent (outside repo)
-    fs::write(
-        parent.join(".bito-lint.toml"),
-        r#"log_level = "error""#,
-    )
-    .unwrap();
+    fs::write(parent.join(".bito-lint.toml"), r#"log_level = "error""#).unwrap();
 
     // .git directory marks repo boundary
     fs::create_dir(repo.join(".git")).unwrap();
@@ -328,11 +296,7 @@ fn config_in_same_dir_as_git_is_found() {
 
     // .git and config in same directory
     fs::create_dir(repo.join(".git")).unwrap();
-    fs::write(
-        repo.join(".bito-lint.toml"),
-        r#"log_level = "debug""#,
-    )
-    .unwrap();
+    fs::write(repo.join(".bito-lint.toml"), r#"log_level = "debug""#).unwrap();
 
     // Running from src/ should find the repo config
     cmd()
@@ -340,4 +304,3 @@ fn config_in_same_dir_as_git_is_found() {
         .assert()
         .success();
 }
-

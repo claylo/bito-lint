@@ -1,31 +1,40 @@
 //! Core library for bito-lint.
 //!
-//! This crate provides the foundational types and functionality used by the
-//! `bito-lint` CLI and any downstream consumers.
+//! This crate provides writing analysis functionality used by the
+//! `bito-lint` CLI and MCP server.
 //!
 //! # Modules
 //!
-//! - [`config`] - Configuration loading and management
-//! - [`error`] - Error types and result aliases
+//! - [`config`] — Configuration loading and management
+//! - [`error`] — Error types and result aliases
+//! - [`markdown`] — Markdown processing (strip to prose, extract headings)
+//! - [`tokens`] — Token counting via tiktoken
+//! - [`readability`] — Flesch-Kincaid Grade Level scoring
+//! - [`completeness`] — Template section validation
+//! - [`grammar`] — Grammar checking and passive voice detection
+//! - [`analysis`] — Comprehensive writing analysis (18 features)
 //!
 //! # Quick Start
 //!
 //! ```no_run
-//! use bito_lint_core::{Config, ConfigLoader};
+//! use bito_lint_core::tokens;
 //!
-//! let config = ConfigLoader::new()
-//!     .with_user_config(true)
-//!     .load()
-//!     .expect("Failed to load configuration");
-//!
-//! println!("Log level: {:?}", config.log_level);
+//! let report = tokens::count_tokens("Hello, world!", Some(100)).unwrap();
+//! println!("Tokens: {}, over budget: {}", report.count, report.over_budget);
 //! ```
 #![deny(unsafe_code)]
 
+pub mod analysis;
+pub mod completeness;
 pub mod config;
-
+pub mod dictionaries;
 pub mod error;
+pub mod grammar;
+pub mod markdown;
+pub mod readability;
+pub mod text;
+pub mod tokens;
+pub mod word_lists;
 
 pub use config::{Config, ConfigLoader, LogLevel};
-
-pub use error::{ConfigError, ConfigResult};
+pub use error::{AnalysisError, AnalysisResult, ConfigError, ConfigResult};

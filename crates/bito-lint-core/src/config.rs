@@ -32,6 +32,8 @@
 //!     .unwrap();
 //! ```
 
+use std::collections::HashMap;
+
 use camino::{Utf8Path, Utf8PathBuf};
 use figment::Figment;
 use figment::providers::{Format, Json, Serialized, Toml, Yaml};
@@ -43,13 +45,26 @@ use crate::error::{ConfigError, ConfigResult};
 ///
 /// Add your configuration fields here. This struct is deserialized from
 /// config files found during discovery (TOML, YAML, or JSON).
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
     /// Log level for the application (e.g., "debug", "info", "warn", "error").
     pub log_level: LogLevel,
     /// Directory for JSONL log files (falls back to platform defaults if unset).
     pub log_dir: Option<Utf8PathBuf>,
+    /// Default token budget for the `tokens` command.
+    pub token_budget: Option<usize>,
+    /// Default maximum Flesch-Kincaid grade level for the `readability` command.
+    pub max_grade: Option<f64>,
+    /// Default maximum passive voice percentage for the `grammar` command.
+    pub passive_max_percent: Option<f64>,
+    /// Default minimum style score for the `analyze` command.
+    pub style_min_score: Option<i32>,
+    /// Custom completeness templates (name → required section headings).
+    ///
+    /// These extend (not replace) the built-in templates (adr, handoff, design-doc).
+    /// If a custom template name collides with a built-in, the custom one wins.
+    pub templates: Option<HashMap<String, Vec<String>>>,
 }
 
 /// Log level configuration.
@@ -181,7 +196,10 @@ impl ConfigLoader {
         let config: Config = figment
             .extract()
             .map_err(|e| ConfigError::Deserialize(Box::new(e)))?;
-        tracing::info!(log_level = config.log_level.as_str(), "configuration loaded");
+        tracing::info!(
+            log_level = config.log_level.as_str(),
+            "configuration loaded"
+        );
         Ok(config)
     }
 
@@ -328,7 +346,7 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.log_level, LogLevel::Info);
         assert!(config.log_dir.is_none());
-}
+    }
 
     #[test]
     fn test_loader_builds_with_defaults() {
@@ -347,10 +365,10 @@ mod tests {
         let config_path = tmp.path().join("config.toml");
         fs::write(
             &config_path,
-r#"log_level = "debug"
+            r#"log_level = "debug"
 log_dir = "/tmp/bito-lint"
 "#,
-)
+        )
         .unwrap();
 
         // Convert to Utf8PathBuf for API call
@@ -367,7 +385,7 @@ log_dir = "/tmp/bito-lint"
             config.log_dir.as_ref().map(|dir| dir.as_str()),
             Some("/tmp/bito-lint")
         );
-}
+    }
 
     #[test]
     fn test_later_file_overrides_earlier() {
@@ -515,4 +533,3 @@ log_dir = "/tmp/bito-lint"
         }
     }
 }
-

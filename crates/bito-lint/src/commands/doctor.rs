@@ -1,11 +1,13 @@
 //! Doctor command — diagnose configuration and environment.
 
+use bito_lint_core::config;
+use bito_lint_core::dictionaries::{abbreviations, irregular_verbs, syllable_dict};
+use bito_lint_core::{tokens, word_lists};
 use clap::Args;
+use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
 use serde::Serialize;
 use tracing::{debug, instrument};
-use bito_lint_core::config;
-use indicatif::{ProgressBar, ProgressStyle};
 /// Arguments for the `doctor` subcommand.
 #[derive(Args, Debug, Default)]
 pub struct DoctorArgs {
@@ -17,6 +19,21 @@ struct DoctorReport {
     directories: DirectoryPaths,
     config: ConfigStatus,
     environment: EnvironmentInfo,
+    health: HealthChecks,
+}
+
+#[derive(Serialize)]
+struct HealthChecks {
+    /// Whether the tiktoken tokenizer initializes successfully.
+    tokenizer: bool,
+    /// Size of the abbreviation dictionary.
+    abbreviations: usize,
+    /// Size of the irregular verbs dictionary.
+    irregular_verbs: usize,
+    /// Size of the syllable dictionary.
+    syllable_dict: usize,
+    /// Number of word list collections loaded.
+    word_lists: usize,
 }
 
 #[derive(Serialize)]
@@ -54,6 +71,12 @@ impl DoctorReport {
     fn gather(cwd: &camino::Utf8Path) -> Self {
         let config_file = config::find_project_config(cwd);
 
+        // Health checks
+        let tokenizer_ok = tokens::count_tokens("test", None).is_ok();
+
+        // Count word list collections (LazyLock sets that have a .len())
+        let word_list_count = count_word_lists();
+
         Self {
             directories: DirectoryPaths {
                 config: config::user_config_dir().map(|p| p.to_string()),
@@ -88,11 +111,60 @@ impl DoctorReport {
                         value: std::env::var("RUST_LOG").ok(),
                         description: "Log filter directive",
                     },
-
                 ],
+            },
+            health: HealthChecks {
+                tokenizer: tokenizer_ok,
+                abbreviations: abbreviations::ABBREVIATIONS.len(),
+                irregular_verbs: irregular_verbs::IRREGULAR_PAST_PARTICIPLES.len(),
+                syllable_dict: syllable_dict::SYLLABLE_DICT.len(),
+                word_lists: word_list_count,
             },
         }
     }
+}
+
+/// Count the number of loaded word list collections.
+fn count_word_lists() -> usize {
+    // Count non-empty collections
+    let mut count = 0;
+    if !word_lists::GLUE_WORDS.is_empty() {
+        count += 1;
+    }
+    if !word_lists::TRANSITION_WORDS.is_empty() {
+        count += 1;
+    }
+    if !word_lists::TRANSITION_PHRASES.is_empty() {
+        count += 1;
+    }
+    if !word_lists::VAGUE_WORDS.is_empty() {
+        count += 1;
+    }
+    if !word_lists::VAGUE_PHRASES.is_empty() {
+        count += 1;
+    }
+    if !word_lists::BUSINESS_JARGON.is_empty() {
+        count += 1;
+    }
+    if !word_lists::CLICHES.is_empty() {
+        count += 1;
+    }
+    if !word_lists::SENSORY_WORDS.is_empty() {
+        count += 1;
+    }
+    if !word_lists::HIDDEN_VERBS.is_empty() {
+        count += 1;
+    }
+    if !word_lists::CONJUNCTIONS.is_empty() {
+        count += 1;
+    }
+    if !word_lists::US_UK_PAIRS.is_empty() {
+        count += 1;
+    }
+    if !word_lists::HYPHEN_PATTERNS.is_empty() {
+        count += 1;
+    }
+    count
 }
 
 /// Run diagnostics and report configuration status.
@@ -101,33 +173,38 @@ impl DoctorReport {
 /// * `global_json` - Global `--json` flag from CLI
 /// * `cwd` - Current working directory
 #[instrument(name = "cmd_doctor", skip_all, fields(json_output))]
-pub fn cmd_doctor(_args: DoctorArgs, global_json: bool, cwd: &camino::Utf8Path) -> anyhow::Result<()> {
-    debug!(
-        json_output = global_json,
-        "executing doctor command"
-    );
+pub fn cmd_doctor(
+    _args: DoctorArgs,
+    global_json: bool,
+    cwd: &camino::Utf8Path,
+) -> anyhow::Result<()> {
+    debug!(json_output = global_json, "executing doctor command");
 
-let spinner = ProgressBar::new_spinner();
+    let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.cyan} {msg}")
-            .expect("valid template")
+            .expect("valid template"),
     );
     spinner.set_message("Gathering diagnostics...");
     spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
     let report = DoctorReport::gather(cwd);
     spinner.finish_and_clear();
-if global_json {
+    if global_json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
         // Config status
         println!("{}", "Configuration".bold().underline());
         if report.config.found {
-            println!("  {} Config file: {}", "✓".green(), report.config.file.as_deref().unwrap_or("").cyan());
+            println!(
+                "  {} Config file: {}",
+                "✓".green(),
+                report.config.file.as_deref().unwrap_or("").cyan()
+            );
         } else {
             println!("  {} No config file found", "○".yellow());
-}
+        }
         println!();
 
         // Directories
@@ -142,7 +219,10 @@ if global_json {
         println!("{}", "Environment".bold().underline());
         println!("  {}: {}", "Working directory".dimmed(), cwd.cyan());
 
-        let set_vars: Vec<_> = report.environment.env_vars.iter()
+        let set_vars: Vec<_> = report
+            .environment
+            .env_vars
+            .iter()
             .filter(|v| v.value.is_some())
             .collect();
 
@@ -150,9 +230,50 @@ if global_json {
             println!("  {} No XDG/logging overrides set", "○".dimmed());
         } else {
             for var in set_vars {
-                println!("  {}: {}", var.name.dimmed(), var.value.as_deref().unwrap_or("").cyan());
+                println!(
+                    "  {}: {}",
+                    var.name.dimmed(),
+                    var.value.as_deref().unwrap_or("").cyan()
+                );
             }
         }
+        println!();
+
+        // Health checks
+        println!("{}", "Health".bold().underline());
+        let check = |ok: bool, label: &str| {
+            if ok {
+                println!("  {} {}", "✓".green(), label);
+            } else {
+                println!("  {} {}", "✗".red(), label);
+            }
+        };
+        check(report.health.tokenizer, "Tokenizer (cl100k_base)");
+        check(
+            report.health.abbreviations > 0,
+            &format!(
+                "Abbreviations dictionary ({} entries)",
+                report.health.abbreviations
+            ),
+        );
+        check(
+            report.health.irregular_verbs > 0,
+            &format!(
+                "Irregular verbs dictionary ({} entries)",
+                report.health.irregular_verbs
+            ),
+        );
+        check(
+            report.health.syllable_dict > 0,
+            &format!(
+                "Syllable dictionary ({} entries)",
+                report.health.syllable_dict
+            ),
+        );
+        check(
+            report.health.word_lists > 0,
+            &format!("Word lists ({} collections)", report.health.word_lists),
+        );
     }
 
     Ok(())
@@ -191,4 +312,3 @@ mod tests {
         assert!(report.directories.config.is_some() || report.directories.cache.is_some());
     }
 }
-

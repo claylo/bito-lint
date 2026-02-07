@@ -11,4 +11,4 @@ homepage.workspace = true
 clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
 clap_mangen = "0.2"
-bito-lint = { path = "../crates/bito-lint" }
+bito-lint = { path = "../crates/bito-lint", features = ["mcp"] }
