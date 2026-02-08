@@ -1,6 +1,6 @@
 //! Doctor command — diagnose configuration and environment.
 
-use bito_lint_core::config;
+use bito_lint_core::config::{self, Config};
 use bito_lint_core::dictionaries::{abbreviations, irregular_verbs, syllable_dict};
 use bito_lint_core::{tokens, word_lists};
 use clap::Args;
@@ -50,6 +50,8 @@ struct ConfigStatus {
     file: Option<String>,
     /// Whether a config file was found
     found: bool,
+    /// Configured dialect, if any
+    dialect: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -68,7 +70,7 @@ struct EnvVar {
 }
 
 impl DoctorReport {
-    fn gather(cwd: &camino::Utf8Path) -> Self {
+    fn gather(cwd: &camino::Utf8Path, loaded_config: &Config) -> Self {
         let config_file = config::find_project_config(cwd);
 
         // Health checks
@@ -87,6 +89,7 @@ impl DoctorReport {
             config: ConfigStatus {
                 found: config_file.is_some(),
                 file: config_file.map(|p| p.to_string()),
+                dialect: loaded_config.dialect.map(|d| d.as_str().to_string()),
             },
             environment: EnvironmentInfo {
                 cwd: Some(cwd.to_string()),
@@ -110,6 +113,11 @@ impl DoctorReport {
                         name: "RUST_LOG",
                         value: std::env::var("RUST_LOG").ok(),
                         description: "Log filter directive",
+                    },
+                    EnvVar {
+                        name: "BITO_LINT_DIALECT",
+                        value: std::env::var("BITO_LINT_DIALECT").ok(),
+                        description: "Dialect override (en-us, en-gb, en-ca, en-au)",
                     },
                 ],
             },
@@ -172,11 +180,13 @@ fn count_word_lists() -> usize {
 /// # Arguments
 /// * `global_json` - Global `--json` flag from CLI
 /// * `cwd` - Current working directory
+/// * `loaded_config` - The already-loaded configuration
 #[instrument(name = "cmd_doctor", skip_all, fields(json_output))]
 pub fn cmd_doctor(
     _args: DoctorArgs,
     global_json: bool,
     cwd: &camino::Utf8Path,
+    loaded_config: &Config,
 ) -> anyhow::Result<()> {
     debug!(json_output = global_json, "executing doctor command");
 
@@ -189,7 +199,7 @@ pub fn cmd_doctor(
     spinner.set_message("Gathering diagnostics...");
     spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
-    let report = DoctorReport::gather(cwd);
+    let report = DoctorReport::gather(cwd, loaded_config);
     spinner.finish_and_clear();
     if global_json {
         println!("{}", serde_json::to_string_pretty(&report)?);
@@ -204,6 +214,15 @@ pub fn cmd_doctor(
             );
         } else {
             println!("  {} No config file found", "○".yellow());
+        }
+        if let Some(ref dialect) = report.config.dialect {
+            println!("  {} Dialect: {}", "✓".green(), dialect.cyan());
+        } else {
+            println!(
+                "  {} Dialect: {} (consistency checker detects mixing only)",
+                "○".dimmed(),
+                "none".dimmed()
+            );
         }
         println!();
 
@@ -297,17 +316,20 @@ mod tests {
 
     #[test]
     fn test_cmd_doctor_text_succeeds() {
-        assert!(cmd_doctor(DoctorArgs::default(), false, &test_cwd()).is_ok());
+        let config = Config::default();
+        assert!(cmd_doctor(DoctorArgs::default(), false, &test_cwd(), &config).is_ok());
     }
 
     #[test]
     fn test_cmd_doctor_json_succeeds() {
-        assert!(cmd_doctor(DoctorArgs::default(), true, &test_cwd()).is_ok());
+        let config = Config::default();
+        assert!(cmd_doctor(DoctorArgs::default(), true, &test_cwd(), &config).is_ok());
     }
 
     #[test]
     fn test_doctor_report_gathers() {
-        let report = DoctorReport::gather(&test_cwd());
+        let config = Config::default();
+        let report = DoctorReport::gather(&test_cwd(), &config);
         // On most systems, at least config dir should resolve
         assert!(report.directories.config.is_some() || report.directories.cache.is_some());
     }

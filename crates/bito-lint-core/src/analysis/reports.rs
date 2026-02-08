@@ -298,6 +298,9 @@ pub struct ClicheFound {
 /// Spelling and formatting consistency.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ConsistencyReport {
+    /// Active dialect, if enforced (e.g., "en-us", "en-gb").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dialect: Option<String>,
     /// Total inconsistency issues.
     pub total_issues: usize,
     /// Human-readable issue descriptions.

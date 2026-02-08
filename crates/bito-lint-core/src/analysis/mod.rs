@@ -28,6 +28,7 @@ use std::collections::HashSet;
 
 pub use reports::FullAnalysisReport;
 
+use crate::config::Dialect;
 use crate::error::{AnalysisError, AnalysisResult};
 use crate::grammar;
 use crate::markdown;
@@ -65,6 +66,7 @@ pub const ALL_CHECKS: &[&str] = &[
 /// * `checks` — Optional list of check names to run. If `None`, runs all.
 /// * `max_grade` — Optional max readability grade.
 /// * `passive_max` — Optional max passive voice percentage.
+/// * `dialect` — Optional dialect for spelling enforcement.
 #[tracing::instrument(skip(input), fields(text_len = input.len(), strip_md))]
 pub fn run_full_analysis(
     input: &str,
@@ -72,6 +74,7 @@ pub fn run_full_analysis(
     checks: Option<&[String]>,
     max_grade: Option<f64>,
     passive_max: Option<f64>,
+    dialect: Option<Dialect>,
 ) -> AnalysisResult<FullAnalysisReport> {
     let prose = if strip_md {
         markdown::strip_to_prose(input)
@@ -180,7 +183,7 @@ pub fn run_full_analysis(
 
     // Consistency
     let consistency_report = if enabled.contains("consistency") {
-        Some(consistency::analyze_consistency(&prose))
+        Some(consistency::analyze_consistency(&prose, dialect))
     } else {
         None
     };
@@ -265,7 +268,7 @@ mod tests {
     #[test]
     fn full_analysis_runs() {
         let text = "The cat sat on the mat. The dog ran fast. However, the bird flew away.";
-        let report = run_full_analysis(text, false, None, None, None).unwrap();
+        let report = run_full_analysis(text, false, None, None, None, None).unwrap();
         assert!(report.readability.is_some());
         assert!(report.grammar.is_some());
         assert!(report.sticky_sentences.is_some());
@@ -277,7 +280,7 @@ mod tests {
     fn selective_checks() {
         let text = "The cat sat on the mat. The dog ran fast.";
         let checks = vec!["readability".to_string(), "pacing".to_string()];
-        let report = run_full_analysis(text, false, Some(&checks), None, None).unwrap();
+        let report = run_full_analysis(text, false, Some(&checks), None, None, None).unwrap();
         assert!(report.readability.is_some());
         assert!(report.pacing.is_some());
         assert!(report.grammar.is_none());
@@ -286,14 +289,31 @@ mod tests {
 
     #[test]
     fn empty_input_errors() {
-        let result = run_full_analysis("", false, None, None, None);
+        let result = run_full_analysis("", false, None, None, None, None);
         assert!(result.is_err());
     }
 
     #[test]
     fn markdown_stripping_works() {
         let md = "# Title\n\nThe cat sat on the mat.\n\n```rust\nlet x = 1;\n```";
-        let report = run_full_analysis(md, true, None, None, None).unwrap();
+        let report = run_full_analysis(md, true, None, None, None, None).unwrap();
         assert!(report.readability.is_some());
+    }
+
+    #[test]
+    fn full_analysis_with_dialect() {
+        let text = "The colour of the centre was organised well.";
+        let report = run_full_analysis(
+            text,
+            false,
+            Some(&["consistency".to_string()]),
+            None,
+            None,
+            Some(Dialect::EnUs),
+        )
+        .unwrap();
+        let c = report.consistency.expect("consistency report should exist");
+        assert_eq!(c.dialect.as_deref(), Some("en-us"));
+        assert!(c.total_issues > 0, "should flag UK spellings for en-us");
     }
 }

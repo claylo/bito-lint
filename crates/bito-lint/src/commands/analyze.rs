@@ -7,6 +7,7 @@ use owo_colors::OwoColorize;
 use tracing::{debug, instrument};
 
 use bito_lint_core::analysis;
+use bito_lint_core::config::Dialect;
 
 /// Arguments for the `analyze` subcommand.
 #[derive(Args, Debug)]
@@ -21,6 +22,10 @@ pub struct AnalyzeArgs {
     /// Minimum acceptable style score (0–100).
     #[arg(long)]
     pub style_min: Option<i32>,
+
+    /// English dialect for spelling enforcement (en-us, en-gb, en-ca, en-au).
+    #[arg(long)]
+    pub dialect: Option<Dialect>,
 }
 
 /// Run comprehensive writing analysis on a file.
@@ -31,6 +36,7 @@ pub fn cmd_analyze(
     config_style_min: Option<i32>,
     config_max_grade: Option<f64>,
     config_passive_max: Option<f64>,
+    config_dialect: Option<Dialect>,
 ) -> anyhow::Result<()> {
     debug!(file = %args.file, checks = ?args.checks, "executing analyze command");
 
@@ -39,6 +45,7 @@ pub fn cmd_analyze(
 
     let strip_md = args.file.extension() == Some("md");
     let style_min = args.style_min.or(config_style_min);
+    let dialect = args.dialect.or(config_dialect);
 
     let checks_ref = args.checks.as_deref();
     let report = analysis::run_full_analysis(
@@ -47,6 +54,7 @@ pub fn cmd_analyze(
         checks_ref,
         config_max_grade,
         config_passive_max,
+        dialect,
     )
     .with_context(|| format!("failed to analyze {}", args.file))?;
 
@@ -141,6 +149,24 @@ pub fn cmd_analyze(
             "Clichés:".yellow(),
             c.total_cliches,
         );
+    }
+
+    if let Some(ref c) = report.consistency
+        && c.total_issues > 0
+    {
+        let dialect_info = c
+            .dialect
+            .as_deref()
+            .map_or(String::new(), |d| format!(" ({d} enforced)"));
+        println!(
+            "\n  {} {} issues{}",
+            "Consistency:".yellow(),
+            c.total_issues,
+            dialect_info,
+        );
+        for issue in &c.issues {
+            println!("    {issue}");
+        }
     }
 
     if let Some(ref j) = report.jargon

@@ -66,8 +66,7 @@ mod tests {
 
     #[test]
     fn no_repetition() {
-        let report =
-            analyze_repeated_phrases(&words(&["the", "cat", "sat", "on", "a", "mat"]));
+        let report = analyze_repeated_phrases(&words(&["the", "cat", "sat", "on", "a", "mat"]));
         assert_eq!(report.total_repeated, 0);
     }
 
@@ -91,12 +90,7 @@ mod tests {
         let report = analyze_repeated_phrases(&words(&[
             "in", "the", "morning", "we", "code", "in", "the", "morning", "we", "ship",
         ]));
-        let trigrams: Vec<_> = report
-            .phrases
-            .iter()
-            .filter(|p| p.phrase == "in the morning")
-            .collect();
-        assert!(!trigrams.is_empty());
+        assert!(report.phrases.iter().any(|p| p.phrase == "in the morning"));
     }
 
     #[test]

@@ -69,9 +69,8 @@ mod tests {
 
     #[test]
     fn no_echoes_in_varied_text() {
-        let paragraphs = vec![
-            "The cat sat on the mat while dogs ran through the park.".to_string(),
-        ];
+        let paragraphs =
+            vec!["The cat sat on the mat while dogs ran through the park.".to_string()];
         // Short words and glue words are skipped (len < 4)
         let report = analyze_echoes(&paragraphs);
         assert_eq!(report.total_echoes, 0);
@@ -80,9 +79,8 @@ mod tests {
     #[test]
     fn detects_close_repetition() {
         // "system" appears twice within a few words
-        let paragraphs = vec![
-            "The system failed because the system was overloaded with requests.".to_string(),
-        ];
+        let paragraphs =
+            vec!["The system failed because the system was overloaded with requests.".to_string()];
         let report = analyze_echoes(&paragraphs);
         assert!(report.total_echoes > 0);
         assert_eq!(report.echoes[0].word, "system");
@@ -111,9 +109,7 @@ mod tests {
         let report = analyze_echoes(&paragraphs);
         assert!(report.total_echoes >= 2);
         // Check paragraph numbers are correct
-        let p1: Vec<_> = report.echoes.iter().filter(|e| e.paragraph == 1).collect();
-        let p2: Vec<_> = report.echoes.iter().filter(|e| e.paragraph == 2).collect();
-        assert!(!p1.is_empty());
-        assert!(!p2.is_empty());
+        assert!(report.echoes.iter().any(|e| e.paragraph == 1));
+        assert!(report.echoes.iter().any(|e| e.paragraph == 2));
     }
 }

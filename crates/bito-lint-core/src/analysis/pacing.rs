@@ -85,7 +85,7 @@ mod tests {
     #[test]
     fn mixed_pacing() {
         let sentences = vec![
-            "Run fast.".to_string(),                                                  // fast
+            "Run fast.".to_string(), // fast
             "The quick brown fox jumps over the lazy dog near the river.".to_string(), // medium
             "The extraordinarily complicated implementation of the sophisticated algorithm \
              required careful consideration of numerous edge cases and potential failure \

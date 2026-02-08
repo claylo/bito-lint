@@ -21,6 +21,7 @@ use rmcp::model::{CallToolResult, Content, Implementation, ServerCapabilities, S
 use rmcp::schemars;
 use rmcp::{ErrorData as McpError, ServerHandler, tool, tool_handler, tool_router};
 
+use bito_lint_core::config::Dialect;
 use bito_lint_core::{analysis, completeness, grammar, readability, tokens};
 
 /// Parameters for the `get_info` tool.
@@ -91,6 +92,25 @@ pub struct AnalyzeWritingParams {
     pub max_grade: Option<f64>,
     /// Maximum acceptable passive voice percentage.
     pub passive_max: Option<f64>,
+    /// English dialect for spelling enforcement (en-us, en-gb, en-ca, en-au).
+    pub dialect: Option<String>,
+}
+
+/// Parse a dialect string into a `Dialect` enum value.
+fn parse_dialect(s: Option<&str>) -> Result<Option<Dialect>, McpError> {
+    let Some(s) = s else {
+        return Ok(None);
+    };
+    match s {
+        "en-us" => Ok(Some(Dialect::EnUs)),
+        "en-gb" => Ok(Some(Dialect::EnGb)),
+        "en-ca" => Ok(Some(Dialect::EnCa)),
+        "en-au" => Ok(Some(Dialect::EnAu)),
+        _ => Err(McpError::invalid_params(
+            format!("invalid dialect \"{s}\": expected en-us, en-gb, en-ca, or en-au"),
+            None,
+        )),
+    }
 }
 
 /// MCP server exposing project functionality to AI assistants.
@@ -238,9 +258,11 @@ impl ProjectServer {
         tracing::debug!(
             tool = "analyze_writing",
             strip_md = params.strip_markdown,
+            dialect = ?params.dialect,
             "executing MCP tool"
         );
 
+        let dialect = parse_dialect(params.dialect.as_deref())?;
         let checks_ref = params.checks.as_deref();
         let report = analysis::run_full_analysis(
             &params.text,
@@ -248,6 +270,7 @@ impl ProjectServer {
             checks_ref,
             params.max_grade,
             params.passive_max,
+            dialect,
         )
         .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
@@ -454,6 +477,7 @@ mod tests {
             checks: None,
             max_grade: None,
             passive_max: None,
+            dialect: None,
         });
 
         let result = server
@@ -485,6 +509,86 @@ mod tests {
         let json: serde_json::Value = serde_json::from_str(text).expect("valid JSON");
         assert!(json["sentence_count"].as_u64().unwrap() >= 2);
         assert!(json["passive_count"].as_u64().is_some());
+    }
+
+    #[test]
+    fn analyze_writing_with_dialect() {
+        let server = ProjectServer::new();
+        let params = Parameters(AnalyzeWritingParams {
+            text: "The colour of the centre was nice.".to_string(),
+            strip_markdown: false,
+            checks: Some(vec!["consistency".to_string()]),
+            max_grade: None,
+            passive_max: None,
+            dialect: Some("en-us".to_string()),
+        });
+
+        let result = server
+            .analyze_writing(params)
+            .expect("analyze_writing should succeed");
+        assert!(!result.is_error.unwrap_or(false));
+
+        let text = extract_text(&result).expect("should have text content");
+        let json: serde_json::Value = serde_json::from_str(text).expect("valid JSON");
+        let consistency = &json["consistency"];
+        assert_eq!(consistency["dialect"], "en-us");
+        assert!(consistency["total_issues"].as_u64().unwrap() > 0);
+    }
+
+    #[test]
+    fn analyze_writing_invalid_dialect_returns_error() {
+        let server = ProjectServer::new();
+        let params = Parameters(AnalyzeWritingParams {
+            text: "Hello world.".to_string(),
+            strip_markdown: false,
+            checks: None,
+            max_grade: None,
+            passive_max: None,
+            dialect: Some("fr-fr".to_string()),
+        });
+
+        let result = server.analyze_writing(params);
+        assert!(result.is_err());
+    }
+
+    /// Measure the token cost of MCP tool schemas.
+    ///
+    /// This test ensures the full tool listing (names, descriptions, input
+    /// schemas) stays within a reasonable token budget when loaded into an
+    /// agent's context.
+    #[test]
+    fn mcp_tool_schemas_fit_token_budget() {
+        let server = ProjectServer::new();
+        let tools = server.tool_router.list_all();
+
+        // Serialize tool list to JSON (same format agents receive)
+        let json = serde_json::to_string_pretty(&tools).expect("serialization should work");
+
+        // Count tokens using our own tokenizer
+        let report =
+            bito_lint_core::tokens::count_tokens(&json, None).expect("token counting should work");
+
+        // Print breakdown for manual inspection
+        println!("MCP tool schema token count: {}", report.count);
+        println!("Tool count: {}", tools.len());
+        println!(
+            "Avg tokens per tool: {:.0}",
+            report.count as f64 / tools.len() as f64
+        );
+        for tool in &tools {
+            let tool_json = serde_json::to_string_pretty(&tool).expect("serialize tool");
+            let tool_report =
+                bito_lint_core::tokens::count_tokens(&tool_json, None).expect("count");
+            println!("  {} — {} tokens", tool.name, tool_report.count);
+        }
+
+        // Budget: 4000 tokens for the full listing
+        assert!(
+            report.count <= 4000,
+            "MCP tool schemas use {} tokens, exceeding the 4000-token budget. \
+             Consider trimming descriptions or consolidating tools.",
+            report.count
+        );
     }
 
     #[test]

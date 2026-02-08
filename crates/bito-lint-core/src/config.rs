@@ -36,10 +36,50 @@ use std::collections::HashMap;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use figment::Figment;
-use figment::providers::{Format, Json, Serialized, Toml, Yaml};
+use figment::providers::{Env, Format, Json, Serialized, Toml, Yaml};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{ConfigError, ConfigResult};
+
+/// English dialect for spelling conventions.
+///
+/// When set, the consistency checker enforces the chosen dialect's spelling
+/// (e.g., "color" vs "colour") in addition to detecting mixed usage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+pub enum Dialect {
+    /// American English (color, center, organize, defense).
+    #[cfg_attr(feature = "clap", value(name = "en-us"))]
+    EnUs,
+    /// British English (colour, centre, organise, defence).
+    #[cfg_attr(feature = "clap", value(name = "en-gb"))]
+    EnGb,
+    /// Canadian English (colour, centre, organize, defence — hybrid).
+    #[cfg_attr(feature = "clap", value(name = "en-ca"))]
+    EnCa,
+    /// Australian English (colour, centre, organise, defence — follows GB).
+    #[cfg_attr(feature = "clap", value(name = "en-au"))]
+    EnAu,
+}
+
+impl Dialect {
+    /// Returns the dialect as a BCP-47-style tag.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::EnUs => "en-us",
+            Self::EnGb => "en-gb",
+            Self::EnCa => "en-ca",
+            Self::EnAu => "en-au",
+        }
+    }
+}
+
+impl std::fmt::Display for Dialect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 
 /// The configuration for bito-lint.
 ///
@@ -60,6 +100,8 @@ pub struct Config {
     pub passive_max_percent: Option<f64>,
     /// Default minimum style score for the `analyze` command.
     pub style_min_score: Option<i32>,
+    /// English dialect for spelling enforcement (en-us, en-gb, en-ca, en-au).
+    pub dialect: Option<Dialect>,
     /// Custom completeness templates (name → required section headings).
     ///
     /// These extend (not replace) the built-in templates (adr, handoff, design-doc).
@@ -188,10 +230,14 @@ impl ConfigLoader {
             figment = Self::merge_file(figment, &project_config);
         }
 
-        // Add explicit files (highest precedence)
+        // Add explicit files
         for file in &self.explicit_files {
             figment = Self::merge_file(figment, file);
         }
+
+        // Environment variables (highest precedence)
+        // BITO_LINT_DIALECT=en-gb, BITO_LINT_LOG_LEVEL=debug, etc.
+        figment = figment.merge(Env::prefixed("BITO_LINT_").lowercase(true));
 
         let config: Config = figment
             .extract()
@@ -530,6 +576,111 @@ log_dir = "/tmp/bito-lint"
         let dir = user_config_dir();
         if let Some(path) = dir {
             assert!(path.as_str().contains("bito-lint"));
+        }
+    }
+
+    #[test]
+    fn test_dialect_deserialization_toml() {
+        let tmp = TempDir::new().unwrap();
+        let config_path = tmp.path().join("config.toml");
+        fs::write(&config_path, "dialect = \"en-gb\"\n").unwrap();
+
+        let config_path = Utf8PathBuf::try_from(config_path).unwrap();
+
+        let config = ConfigLoader::new()
+            .with_user_config(false)
+            .with_file(&config_path)
+            .load()
+            .unwrap();
+
+        assert_eq!(config.dialect, Some(Dialect::EnGb));
+    }
+
+    #[test]
+    fn test_dialect_deserialization_all_variants() {
+        for (input, expected) in [
+            ("en-us", Dialect::EnUs),
+            ("en-gb", Dialect::EnGb),
+            ("en-ca", Dialect::EnCa),
+            ("en-au", Dialect::EnAu),
+        ] {
+            let tmp = TempDir::new().unwrap();
+            let config_path = tmp.path().join("config.toml");
+            fs::write(&config_path, format!("dialect = \"{input}\"\n")).unwrap();
+
+            let config_path = Utf8PathBuf::try_from(config_path).unwrap();
+
+            let config = ConfigLoader::new()
+                .with_user_config(false)
+                .with_file(&config_path)
+                .load()
+                .unwrap();
+
+            assert_eq!(config.dialect, Some(expected), "failed for {input}");
+        }
+    }
+
+    #[test]
+    fn test_dialect_default_is_none() {
+        let config = Config::default();
+        assert!(config.dialect.is_none());
+    }
+
+    #[test]
+    fn test_dialect_as_str() {
+        assert_eq!(Dialect::EnUs.as_str(), "en-us");
+        assert_eq!(Dialect::EnGb.as_str(), "en-gb");
+        assert_eq!(Dialect::EnCa.as_str(), "en-ca");
+        assert_eq!(Dialect::EnAu.as_str(), "en-au");
+    }
+
+    #[test]
+    #[allow(unsafe_code)]
+    fn test_env_var_override_dialect() {
+        // SAFETY: Test environment — no concurrent env reads expected.
+        unsafe {
+            std::env::set_var("BITO_LINT_DIALECT", "en-ca");
+        }
+
+        let config = ConfigLoader::new()
+            .with_user_config(false)
+            .without_boundary_marker()
+            .load()
+            .unwrap();
+
+        assert_eq!(config.dialect, Some(Dialect::EnCa));
+
+        // SAFETY: Cleanup after test.
+        unsafe {
+            std::env::remove_var("BITO_LINT_DIALECT");
+        }
+    }
+
+    #[test]
+    #[allow(unsafe_code)]
+    fn test_env_var_overrides_file_config() {
+        let tmp = TempDir::new().unwrap();
+        let config_path = tmp.path().join("config.toml");
+        fs::write(&config_path, "dialect = \"en-us\"\n").unwrap();
+
+        let config_path = Utf8PathBuf::try_from(config_path).unwrap();
+
+        // SAFETY: Test environment — no concurrent env reads expected.
+        unsafe {
+            std::env::set_var("BITO_LINT_DIALECT", "en-au");
+        }
+
+        let config = ConfigLoader::new()
+            .with_user_config(false)
+            .with_file(&config_path)
+            .load()
+            .unwrap();
+
+        assert_eq!(config.dialect, Some(Dialect::EnAu));
+
+        // SAFETY: Cleanup after test.
+        unsafe {
+            std::env::remove_var("BITO_LINT_DIALECT");
         }
     }
 }

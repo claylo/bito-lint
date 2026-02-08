@@ -47,6 +47,18 @@ log_level = "info"
 # style_min_score = 60
 
 # ------------------------------------------------------------------------------
+# Dialect
+# ------------------------------------------------------------------------------
+
+# English dialect for spelling enforcement in the consistency checker.
+# When set, flags wrong-dialect spellings (e.g., "colour" when en-us is set).
+# When unset, only detects mixed US/UK spelling (no enforcement).
+# Values: "en-us", "en-gb", "en-ca", "en-au"
+# CLI flag --dialect overrides this value.
+# Environment variable BITO_LINT_DIALECT also overrides this value.
+# dialect = "en-us"
+
+# ------------------------------------------------------------------------------
 # Custom Completeness Templates
 # ------------------------------------------------------------------------------
 

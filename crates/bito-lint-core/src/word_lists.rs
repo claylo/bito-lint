@@ -397,25 +397,175 @@ pub static CONJUNCTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         .collect()
 });
 
-/// US/UK spelling pairs `(us, uk)`.
-pub static US_UK_PAIRS: LazyLock<Vec<(&'static str, &'static str)>> = LazyLock::new(|| {
+/// Categorizes spelling differences between US and UK English.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpellingPattern {
+    /// -or vs -our (color/colour)
+    OrOur,
+    /// -er vs -re (center/centre)
+    ErRe,
+    /// -ize vs -ise (organize/organise)
+    IzeIse,
+    /// -ense vs -ence (defense/defence)
+    EnseEnce,
+    /// -og vs -ogue (catalog/catalogue)
+    OgOgue,
+    /// -am vs -amme (program/programme)
+    AmAmme,
+    /// Doubled consonant differences (traveling/travelling)
+    Double,
+    /// Miscellaneous spelling differences (gray/grey)
+    Misc,
+}
+
+/// A US/UK spelling pair with its pattern category.
+#[derive(Debug, Clone, Copy)]
+pub struct SpellingPair {
+    /// The US spelling.
+    pub us: &'static str,
+    /// The UK spelling.
+    pub uk: &'static str,
+    /// The pattern this pair belongs to.
+    pub pattern: SpellingPattern,
+}
+
+impl SpellingPair {
+    const fn new(us: &'static str, uk: &'static str, pattern: SpellingPattern) -> Self {
+        Self { us, uk, pattern }
+    }
+}
+
+use crate::config::Dialect;
+
+impl Dialect {
+    /// Whether this dialect prefers the US form for a given spelling pattern.
+    ///
+    /// Canadian English is hybrid: US for `-ize/-ise` and `-am/-amme`,
+    /// UK for everything else.
+    pub const fn prefers_us(&self, pattern: SpellingPattern) -> bool {
+        match self {
+            Self::EnUs => true,
+            Self::EnGb | Self::EnAu => false,
+            Self::EnCa => matches!(pattern, SpellingPattern::IzeIse | SpellingPattern::AmAmme),
+        }
+    }
+
+    /// Returns the preferred spelling for a pair in this dialect.
+    pub const fn preferred_form<'a>(&self, pair: &'a SpellingPair) -> &'a str {
+        if self.prefers_us(pair.pattern) {
+            pair.us
+        } else {
+            pair.uk
+        }
+    }
+}
+
+/// US/UK spelling pairs organized by pattern.
+pub static SPELLING_PAIRS: LazyLock<Vec<SpellingPair>> = LazyLock::new(|| {
+    use SpellingPattern::*;
     vec![
-        ("color", "colour"),
-        ("favor", "favour"),
-        ("honor", "honour"),
-        ("labor", "labour"),
-        ("neighbor", "neighbour"),
-        ("center", "centre"),
-        ("meter", "metre"),
-        ("fiber", "fibre"),
-        ("organize", "organise"),
-        ("recognize", "recognise"),
-        ("analyze", "analyse"),
-        ("defense", "defence"),
-        ("license", "licence"),
-        ("traveling", "travelling"),
-        ("canceled", "cancelled"),
+        // -or / -our
+        SpellingPair::new("color", "colour", OrOur),
+        SpellingPair::new("favor", "favour", OrOur),
+        SpellingPair::new("honor", "honour", OrOur),
+        SpellingPair::new("labor", "labour", OrOur),
+        SpellingPair::new("neighbor", "neighbour", OrOur),
+        SpellingPair::new("humor", "humour", OrOur),
+        SpellingPair::new("flavor", "flavour", OrOur),
+        SpellingPair::new("tumor", "tumour", OrOur),
+        SpellingPair::new("vigor", "vigour", OrOur),
+        SpellingPair::new("valor", "valour", OrOur),
+        SpellingPair::new("behavior", "behaviour", OrOur),
+        SpellingPair::new("harbor", "harbour", OrOur),
+        SpellingPair::new("savior", "saviour", OrOur),
+        SpellingPair::new("armor", "armour", OrOur),
+        SpellingPair::new("clamor", "clamour", OrOur),
+        SpellingPair::new("glamor", "glamour", OrOur),
+        SpellingPair::new("parlor", "parlour", OrOur),
+        SpellingPair::new("rancor", "rancour", OrOur),
+        SpellingPair::new("endeavor", "endeavour", OrOur),
+        SpellingPair::new("candor", "candour", OrOur),
+        SpellingPair::new("demeanor", "demeanour", OrOur),
+        SpellingPair::new("splendor", "splendour", OrOur),
+        SpellingPair::new("odor", "odour", OrOur),
+        SpellingPair::new("rumor", "rumour", OrOur),
+        // -er / -re
+        SpellingPair::new("center", "centre", ErRe),
+        SpellingPair::new("meter", "metre", ErRe),
+        SpellingPair::new("fiber", "fibre", ErRe),
+        SpellingPair::new("theater", "theatre", ErRe),
+        SpellingPair::new("somber", "sombre", ErRe),
+        SpellingPair::new("luster", "lustre", ErRe),
+        SpellingPair::new("meager", "meagre", ErRe),
+        SpellingPair::new("caliber", "calibre", ErRe),
+        SpellingPair::new("saber", "sabre", ErRe),
+        SpellingPair::new("specter", "spectre", ErRe),
+        SpellingPair::new("miter", "mitre", ErRe),
+        SpellingPair::new("ocher", "ochre", ErRe),
+        SpellingPair::new("maneuver", "manoeuvre", ErRe),
+        SpellingPair::new("sepulcher", "sepulchre", ErRe),
+        // -ize / -ise
+        SpellingPair::new("organize", "organise", IzeIse),
+        SpellingPair::new("recognize", "recognise", IzeIse),
+        SpellingPair::new("analyze", "analyse", IzeIse),
+        SpellingPair::new("realize", "realise", IzeIse),
+        SpellingPair::new("customize", "customise", IzeIse),
+        SpellingPair::new("specialize", "specialise", IzeIse),
+        SpellingPair::new("apologize", "apologise", IzeIse),
+        SpellingPair::new("minimize", "minimise", IzeIse),
+        SpellingPair::new("optimize", "optimise", IzeIse),
+        SpellingPair::new("authorize", "authorise", IzeIse),
+        SpellingPair::new("categorize", "categorise", IzeIse),
+        SpellingPair::new("criticize", "criticise", IzeIse),
+        SpellingPair::new("emphasize", "emphasise", IzeIse),
+        SpellingPair::new("finalize", "finalise", IzeIse),
+        SpellingPair::new("initialize", "initialise", IzeIse),
+        SpellingPair::new("standardize", "standardise", IzeIse),
+        SpellingPair::new("summarize", "summarise", IzeIse),
+        SpellingPair::new("utilize", "utilise", IzeIse),
+        // -ense / -ence
+        SpellingPair::new("defense", "defence", EnseEnce),
+        SpellingPair::new("offense", "offence", EnseEnce),
+        SpellingPair::new("license", "licence", EnseEnce),
+        SpellingPair::new("pretense", "pretence", EnseEnce),
+        // -og / -ogue
+        SpellingPair::new("analog", "analogue", OgOgue),
+        SpellingPair::new("catalog", "catalogue", OgOgue),
+        SpellingPair::new("dialog", "dialogue", OgOgue),
+        SpellingPair::new("monolog", "monologue", OgOgue),
+        SpellingPair::new("prolog", "prologue", OgOgue),
+        // -am / -amme
+        SpellingPair::new("program", "programme", AmAmme),
+        SpellingPair::new("gram", "gramme", AmAmme),
+        // Doubled consonants
+        SpellingPair::new("traveling", "travelling", Double),
+        SpellingPair::new("canceled", "cancelled", Double),
+        SpellingPair::new("counselor", "counsellor", Double),
+        SpellingPair::new("modeling", "modelling", Double),
+        SpellingPair::new("leveling", "levelling", Double),
+        SpellingPair::new("labeled", "labelled", Double),
+        SpellingPair::new("signaling", "signalling", Double),
+        SpellingPair::new("marvelous", "marvellous", Double),
+        SpellingPair::new("enrollment", "enrolment", Double),
+        SpellingPair::new("fulfillment", "fulfilment", Double),
+        SpellingPair::new("skillful", "skilful", Double),
+        SpellingPair::new("installment", "instalment", Double),
+        // Miscellaneous
+        SpellingPair::new("gray", "grey", Misc),
+        SpellingPair::new("artifact", "artefact", Misc),
+        SpellingPair::new("skeptic", "sceptic", Misc),
+        SpellingPair::new("jewelry", "jewellery", Misc),
+        SpellingPair::new("aluminum", "aluminium", Misc),
+        SpellingPair::new("pajamas", "pyjamas", Misc),
     ]
+});
+
+/// Backward-compatible accessor: US/UK spelling pairs as `(us, uk)` tuples.
+pub static US_UK_PAIRS: LazyLock<Vec<(&'static str, &'static str)>> = LazyLock::new(|| {
+    SPELLING_PAIRS
+        .iter()
+        .map(|pair| (pair.us, pair.uk))
+        .collect()
 });
 
 /// Hyphenation variant pairs `(joined, hyphenated)`.

@@ -64,6 +64,7 @@ fn main() -> anyhow::Result<()> {
             config.style_min_score,
             config.max_grade,
             config.passive_max_percent,
+            config.dialect,
         ),
         Commands::Tokens(args) => commands::tokens::cmd_tokens(args, cli.json, config.token_budget),
         Commands::Readability(args) => {
@@ -75,7 +76,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Grammar(args) => {
             commands::grammar::cmd_grammar(args, cli.json, config.passive_max_percent)
         }
-        Commands::Doctor(args) => commands::doctor::cmd_doctor(args, cli.json, &cwd),
+        Commands::Doctor(args) => commands::doctor::cmd_doctor(args, cli.json, &cwd, &config),
         Commands::Info(args) => commands::info::cmd_info(args, cli.json, &config, &cwd),
         #[cfg(feature = "mcp")]
         Commands::Serve(args) => {
