@@ -97,8 +97,12 @@ jobs:
         run: |
           if [[ "${{ matrix.build.target }}" == "aarch64-unknown-linux-gnu" ]]; then
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+            # Clear rustflags that set -fuse-ld=lld from .cargo/config.toml —
+            # lld isn't available for aarch64 cross-compilation on the runner
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS=""
           elif [[ "${{ matrix.build.target }}" == "aarch64-unknown-linux-musl" ]]; then
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS=""
             export CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
           fi
           cargo auditable build --release --locked --target ${{ matrix.build.target }}
