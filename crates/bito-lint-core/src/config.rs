@@ -102,6 +102,11 @@ pub struct Config {
     pub style_min_score: Option<i32>,
     /// English dialect for spelling enforcement (en-us, en-gb, en-ca, en-au).
     pub dialect: Option<Dialect>,
+    /// Maximum input size in bytes (default: 5 MiB).
+    ///
+    /// Prevents resource exhaustion from oversized inputs in both CLI and MCP server.
+    /// Set to `null` / omit to disable the limit.
+    pub max_input_bytes: Option<usize>,
     /// Custom completeness templates (name → required section headings).
     ///
     /// These extend (not replace) the built-in templates (adr, handoff, design-doc).
@@ -385,7 +390,12 @@ pub fn user_data_local_dir() -> Option<Utf8PathBuf> {
 mod tests {
     use super::*;
     use std::fs;
+    use std::sync::Mutex;
     use tempfile::TempDir;
+
+    /// Serializes tests that mutate environment variables via `set_var`/`remove_var`.
+    /// Prevents race conditions when nextest runs tests in the same binary concurrently.
+    static TEST_ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_default_config() {
@@ -637,7 +647,9 @@ log_dir = "/tmp/bito-lint"
     #[test]
     #[allow(unsafe_code)]
     fn test_env_var_override_dialect() {
-        // SAFETY: Test environment — no concurrent env reads expected.
+        let _lock = TEST_ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+
+        // SAFETY: Test environment — mutex serializes env access across tests.
         unsafe {
             std::env::set_var("BITO_LINT_DIALECT", "en-ca");
         }
@@ -659,13 +671,15 @@ log_dir = "/tmp/bito-lint"
     #[test]
     #[allow(unsafe_code)]
     fn test_env_var_overrides_file_config() {
+        let _lock = TEST_ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+
         let tmp = TempDir::new().unwrap();
         let config_path = tmp.path().join("config.toml");
         fs::write(&config_path, "dialect = \"en-us\"\n").unwrap();
 
         let config_path = Utf8PathBuf::try_from(config_path).unwrap();
 
-        // SAFETY: Test environment — no concurrent env reads expected.
+        // SAFETY: Test environment — mutex serializes env access across tests.
         unsafe {
             std::env::set_var("BITO_LINT_DIALECT", "en-au");
         }
