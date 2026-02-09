@@ -7,8 +7,8 @@ on:
 
 permissions:
   contents: write
-  id-token: write      # Sigstore OIDC for attestations
-  attestations: write  # Persist attestations
+  id-token: write # Sigstore OIDC for attestations
+  attestations: write # Persist attestations
 
 env:
   CARGO_TERM_COLOR: always
@@ -46,14 +46,38 @@ jobs:
       fail-fast: false
       matrix:
         build:
-          - { NAME: linux-x64-gnu, os: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
-          - { NAME: linux-x64-musl, os: ubuntu-22.04, target: x86_64-unknown-linux-musl }
-          - { NAME: linux-arm64-gnu, os: ubuntu-22.04, target: aarch64-unknown-linux-gnu }
-          - { NAME: linux-arm64-musl, os: ubuntu-22.04, target: aarch64-unknown-linux-musl }
+          - {
+              NAME: linux-x64-gnu,
+              os: ubuntu-22.04,
+              target: x86_64-unknown-linux-gnu,
+            }
+          - {
+              NAME: linux-x64-musl,
+              os: ubuntu-22.04,
+              target: x86_64-unknown-linux-musl,
+            }
+          - {
+              NAME: linux-arm64-gnu,
+              os: ubuntu-22.04,
+              target: aarch64-unknown-linux-gnu,
+            }
+          - {
+              NAME: linux-arm64-musl,
+              os: ubuntu-22.04,
+              target: aarch64-unknown-linux-musl,
+            }
           - { NAME: darwin-x64, os: macos-15, target: x86_64-apple-darwin }
           - { NAME: darwin-arm64, os: macos-15, target: aarch64-apple-darwin }
-          - { NAME: windows-x64-msvc, os: windows-2025, target: x86_64-pc-windows-msvc }
-          - { NAME: windows-arm64-msvc, os: windows-2025, target: aarch64-pc-windows-msvc }
+          - {
+              NAME: windows-x64-msvc,
+              os: windows-2025,
+              target: x86_64-pc-windows-msvc,
+            }
+          - {
+              NAME: windows-arm64-msvc,
+              os: windows-2025,
+              target: aarch64-pc-windows-msvc,
+            }
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.1
@@ -67,10 +91,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
-          # musl cross-compiler for arm64
           if [[ "${{ matrix.build.target }}" == *"musl"* ]]; then
             sudo apt-get install -y musl-tools
-            # Use gcc as linker for musl arm64 cross-compilation
           fi
 
       - name: Rust toolchain
@@ -97,16 +119,11 @@ jobs:
         run: |
           if [[ "${{ matrix.build.target }}" == "aarch64-unknown-linux-gnu" ]]; then
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-            # Clear rustflags that set -fuse-ld=lld from .cargo/config.toml —
-            # lld isn't available for aarch64 cross-compilation on the runner
-            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS=""
           elif [[ "${{ matrix.build.target }}" == "aarch64-unknown-linux-musl" ]]; then
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
-            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS=""
             export CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
           fi
           cargo auditable build --release --locked --target ${{ matrix.build.target }}
-
 
       - name: Generate man pages
         if: runner.os != 'Windows'
@@ -139,7 +156,7 @@ jobs:
           TARGET: ${{ matrix.build.target }}
         run: |
           mkdir -p release/bin release/share
-          cp LICENSE-* README.md CHANGELOG.md release/ 2>/dev/null || true
+          cp LICENSE-* THIRD-PARTY-NOTICES README.md CHANGELOG.md release/ 2>/dev/null || true
 
           # Binary
           bin="$PROJECT_NAME"
@@ -175,6 +192,10 @@ jobs:
           echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --pinentry-mode=loopback --passphrase-fd 0 --import private.key
           echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --pinentry-mode=loopback --passphrase-fd 0 --detach-sign "${PROJECT_NAME}-${VERSION}-${TARGET}.tar.gz"
 
+      - name: Clean up GPG key material
+        if: always() && vars.GPG_SIGNING_ENABLED == 'true'
+        run: rm -f private.key
+
       - name: Upload release
         if: ${{ !contains(github.ref, '-') }}
         uses: svenstaro/upload-release-action@6b7fa9f267e90b50a19fef07b3596790bb941741 # 2.11.3
@@ -199,12 +220,10 @@ jobs:
           release_name: "Pre-release v${{ needs.generate-changelog.outputs.version }}"
           prerelease: true
 
-
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
           subject-path: ${{ env.PROJECT_NAME }}-${{ needs.generate-changelog.outputs.version }}-${{ matrix.build.target }}*
-
 
   publish-crates-io:
     name: Publish to crates.io
@@ -233,6 +252,7 @@ jobs:
         uses: mislav/bump-homebrew-formula-action@56a283fa15557e9abaa4bdb63b8212abc68e655c # v3.6
         with:
           formula-name: ${{ env.PROJECT_NAME }}
+          homebrew-tap: claylo/homebrew-brew
         env:
           COMMITTER_TOKEN: ${{ secrets.HOMEBREW_COMMITTER_TOKEN }}
 
@@ -470,4 +490,3 @@ jobs:
         run: |
           cd "npm/${PROJECT_NAME}"
           npm publish --access public
-
