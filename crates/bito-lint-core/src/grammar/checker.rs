@@ -3,6 +3,7 @@
 //! Checks for common grammar issues: subject-verb agreement, double negatives,
 //! run-on sentences, comma splices, double spaces, and missing punctuation.
 
+use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -192,167 +193,48 @@ fn check_comma_splice(sentence: &str) -> bool {
     clause_count >= 2
 }
 
+/// Words that indicate a subject in a clause.
+static SUBJECTS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from([
+        "i", "you", "he", "she", "it", "we", "they", "the", "a", "an", "this", "that",
+    ])
+});
+
+/// Common English verbs (base, third-person, and past forms).
+static COMMON_VERBS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from([
+        // be / have / do
+        "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does",
+        "did", // modals
+        "will", "would", "could", "should", "may", "might", "must", "can", "shall",
+        // common verbs (base / 3rd / past)
+        "go", "goes", "went", "gone", "make", "makes", "made", "get", "gets", "got", "say", "says",
+        "said", "know", "knows", "knew", "think", "thinks", "thought", "come", "comes", "came",
+        "take", "takes", "took", "see", "sees", "saw", "want", "wants", "wanted", "look", "looks",
+        "looked", "use", "uses", "used", "find", "finds", "found", "give", "gives", "gave", "tell",
+        "tells", "told", "work", "works", "worked", "call", "calls", "called", "try", "tries",
+        "tried", "ask", "asks", "asked", "need", "needs", "needed", "feel", "feels", "felt",
+        "become", "becomes", "became", "leave", "leaves", "left", "put", "puts", "run", "runs",
+        "ran", "keep", "keeps", "kept", "let", "lets", "begin", "begins", "began", "show", "shows",
+        "showed", "hear", "hears", "heard", "play", "plays", "played", "move", "moves", "moved",
+        "live", "lives", "lived", "happen", "happens", "happened", "write", "writes", "wrote",
+        "provide", "provides", "provided", "read", "reads", "stand", "stands", "stood",
+    ])
+});
+
 /// Simplified check for whether text has both a subject and verb.
 fn has_subject_and_verb(text: &str) -> bool {
     if text.split_whitespace().count() < 3 {
         return false;
     }
 
-    let has_subject = text.split_whitespace().any(|w| {
-        matches!(
-            w.to_lowercase().as_str(),
-            "i" | "you"
-                | "he"
-                | "she"
-                | "it"
-                | "we"
-                | "they"
-                | "the"
-                | "a"
-                | "an"
-                | "this"
-                | "that"
-        )
-    });
+    let has_subject = text
+        .split_whitespace()
+        .any(|w| SUBJECTS.contains(w.to_lowercase().as_str()));
 
-    let has_verb = text.split_whitespace().any(|w| {
-        matches!(
-            w.to_lowercase().as_str(),
-            "is" | "are"
-                | "was"
-                | "were"
-                | "be"
-                | "been"
-                | "being"
-                | "have"
-                | "has"
-                | "had"
-                | "do"
-                | "does"
-                | "did"
-                | "will"
-                | "would"
-                | "could"
-                | "should"
-                | "may"
-                | "might"
-                | "must"
-                | "can"
-                | "shall"
-                | "go"
-                | "goes"
-                | "went"
-                | "gone"
-                | "make"
-                | "makes"
-                | "made"
-                | "get"
-                | "gets"
-                | "got"
-                | "say"
-                | "says"
-                | "said"
-                | "know"
-                | "knows"
-                | "knew"
-                | "think"
-                | "thinks"
-                | "thought"
-                | "come"
-                | "comes"
-                | "came"
-                | "take"
-                | "takes"
-                | "took"
-                | "see"
-                | "sees"
-                | "saw"
-                | "want"
-                | "wants"
-                | "wanted"
-                | "look"
-                | "looks"
-                | "looked"
-                | "use"
-                | "uses"
-                | "used"
-                | "find"
-                | "finds"
-                | "found"
-                | "give"
-                | "gives"
-                | "gave"
-                | "tell"
-                | "tells"
-                | "told"
-                | "work"
-                | "works"
-                | "worked"
-                | "call"
-                | "calls"
-                | "called"
-                | "try"
-                | "tries"
-                | "tried"
-                | "ask"
-                | "asks"
-                | "asked"
-                | "need"
-                | "needs"
-                | "needed"
-                | "feel"
-                | "feels"
-                | "felt"
-                | "become"
-                | "becomes"
-                | "became"
-                | "leave"
-                | "leaves"
-                | "left"
-                | "put"
-                | "puts"
-                | "run"
-                | "runs"
-                | "ran"
-                | "keep"
-                | "keeps"
-                | "kept"
-                | "let"
-                | "lets"
-                | "begin"
-                | "begins"
-                | "began"
-                | "show"
-                | "shows"
-                | "showed"
-                | "hear"
-                | "hears"
-                | "heard"
-                | "play"
-                | "plays"
-                | "played"
-                | "move"
-                | "moves"
-                | "moved"
-                | "live"
-                | "lives"
-                | "lived"
-                | "happen"
-                | "happens"
-                | "happened"
-                | "write"
-                | "writes"
-                | "wrote"
-                | "provide"
-                | "provides"
-                | "provided"
-                | "read"
-                | "reads"
-                | "stand"
-                | "stands"
-                | "stood"
-        )
-    });
+    let has_verb = text
+        .split_whitespace()
+        .any(|w| COMMON_VERBS.contains(w.to_lowercase().as_str()));
 
     has_subject && has_verb
 }
