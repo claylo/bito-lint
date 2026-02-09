@@ -14,8 +14,8 @@ repository = "https://github.com/claylo/bito-lint"
 homepage = "https://github.com/claylo/bito-lint"
 documentation = "https://docs.rs/bito-lint"
 description = "Quality gate tooling for building-in-the-open artifacts"
-keywords = []
-categories = []
+keywords = ["writing-quality", "readability", "documentation", "lint", "mcp"]
+categories = ["command-line-utilities", "development-tools", "text-processing"]
 
 [workspace.lints.rust]
 # Use "deny" instead of "forbid" to allow benchmark harnesses to override
@@ -64,4 +64,3 @@ inherits = "release"
 opt-level = 1
 debug = true
 strip = false
-
