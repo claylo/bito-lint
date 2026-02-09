@@ -22,7 +22,7 @@ use rmcp::schemars;
 use rmcp::{ErrorData as McpError, ServerHandler, tool, tool_handler, tool_router};
 
 use bito_lint_core::config::Dialect;
-use bito_lint_core::{analysis, completeness, grammar, readability, tokens};
+use bito_lint_core::{self as core, analysis, completeness, grammar, readability, tokens};
 
 /// Parameters for the `get_info` tool.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -120,6 +120,7 @@ fn parse_dialect(s: Option<&str>) -> Result<Option<Dialect>, McpError> {
 #[derive(Clone)]
 pub struct ProjectServer {
     tool_router: rmcp::handler::server::router::tool::ToolRouter<Self>,
+    max_input_bytes: Option<usize>,
 }
 
 impl Default for ProjectServer {
@@ -134,7 +135,20 @@ impl ProjectServer {
     pub fn new() -> Self {
         Self {
             tool_router: Self::tool_router(),
+            max_input_bytes: Some(core::DEFAULT_MAX_INPUT_BYTES),
         }
+    }
+
+    /// Create a new MCP server with a custom input size limit.
+    pub const fn with_max_input_bytes(mut self, max_bytes: Option<usize>) -> Self {
+        self.max_input_bytes = max_bytes;
+        self
+    }
+
+    /// Validate input text size against the configured limit.
+    fn validate_input(&self, text: &str) -> Result<(), McpError> {
+        core::validate_input_size(text, self.max_input_bytes)
+            .map_err(|e| McpError::invalid_params(e.to_string(), None))
     }
 
     /// Get project information.
@@ -176,6 +190,7 @@ impl ProjectServer {
         #[allow(unused_variables)] Parameters(params): Parameters<CountTokensParams>,
     ) -> Result<CallToolResult, McpError> {
         tracing::debug!(tool = "count_tokens", budget = ?params.budget, "executing MCP tool");
+        self.validate_input(&params.text)?;
 
         let report = tokens::count_tokens(&params.text, params.budget)
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
@@ -205,6 +220,7 @@ impl ProjectServer {
             strip_md = params.strip_markdown,
             "executing MCP tool"
         );
+        self.validate_input(&params.text)?;
 
         let report =
             readability::check_readability(&params.text, params.strip_markdown, params.max_grade)
@@ -231,6 +247,7 @@ impl ProjectServer {
         #[allow(unused_variables)] Parameters(params): Parameters<CheckCompletenessParams>,
     ) -> Result<CallToolResult, McpError> {
         tracing::debug!(tool = "check_completeness", template = %params.template, "executing MCP tool");
+        self.validate_input(&params.text)?;
 
         let report = completeness::check_completeness(&params.text, &params.template, None)
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
@@ -261,6 +278,7 @@ impl ProjectServer {
             dialect = ?params.dialect,
             "executing MCP tool"
         );
+        self.validate_input(&params.text)?;
 
         let dialect = parse_dialect(params.dialect.as_deref())?;
         let checks_ref = params.checks.as_deref();
@@ -295,6 +313,7 @@ impl ProjectServer {
             strip_md = params.strip_markdown,
             "executing MCP tool"
         );
+        self.validate_input(&params.text)?;
 
         let report =
             grammar::check_grammar_full(&params.text, params.strip_markdown, params.passive_max)

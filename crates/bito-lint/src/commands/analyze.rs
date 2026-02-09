@@ -9,6 +9,8 @@ use tracing::{debug, instrument};
 use bito_lint_core::analysis;
 use bito_lint_core::config::Dialect;
 
+use super::read_input_file;
+
 /// Arguments for the `analyze` subcommand.
 #[derive(Args, Debug)]
 pub struct AnalyzeArgs {
@@ -37,11 +39,11 @@ pub fn cmd_analyze(
     config_max_grade: Option<f64>,
     config_passive_max: Option<f64>,
     config_dialect: Option<Dialect>,
+    max_input_bytes: Option<usize>,
 ) -> anyhow::Result<()> {
     debug!(file = %args.file, checks = ?args.checks, "executing analyze command");
 
-    let content = std::fs::read_to_string(args.file.as_std_path())
-        .with_context(|| format!("failed to read {}", args.file))?;
+    let content = read_input_file(&args.file, max_input_bytes)?;
 
     let strip_md = args.file.extension() == Some("md");
     let style_min = args.style_min.or(config_style_min);

@@ -8,6 +8,8 @@ use tracing::{debug, instrument};
 
 use bito_lint_core::readability;
 
+use super::read_input_file;
+
 /// Arguments for the `readability` subcommand.
 #[derive(Args, Debug)]
 pub struct ReadabilityArgs {
@@ -25,11 +27,11 @@ pub fn cmd_readability(
     args: ReadabilityArgs,
     global_json: bool,
     config_max_grade: Option<f64>,
+    max_input_bytes: Option<usize>,
 ) -> anyhow::Result<()> {
     debug!(file = %args.file, max_grade = ?args.max_grade, "executing readability command");
 
-    let content = std::fs::read_to_string(args.file.as_std_path())
-        .with_context(|| format!("failed to read {}", args.file))?;
+    let content = read_input_file(&args.file, max_input_bytes)?;
 
     let strip_md = args.file.extension() == Some("md");
     let max_grade = args.max_grade.or(config_max_grade);

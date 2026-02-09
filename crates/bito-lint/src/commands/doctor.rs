@@ -134,45 +134,23 @@ impl DoctorReport {
 
 /// Count the number of loaded word list collections.
 fn count_word_lists() -> usize {
-    // Count non-empty collections
-    let mut count = 0;
-    if !word_lists::GLUE_WORDS.is_empty() {
-        count += 1;
-    }
-    if !word_lists::TRANSITION_WORDS.is_empty() {
-        count += 1;
-    }
-    if !word_lists::TRANSITION_PHRASES.is_empty() {
-        count += 1;
-    }
-    if !word_lists::VAGUE_WORDS.is_empty() {
-        count += 1;
-    }
-    if !word_lists::VAGUE_PHRASES.is_empty() {
-        count += 1;
-    }
-    if !word_lists::BUSINESS_JARGON.is_empty() {
-        count += 1;
-    }
-    if !word_lists::CLICHES.is_empty() {
-        count += 1;
-    }
-    if !word_lists::SENSORY_WORDS.is_empty() {
-        count += 1;
-    }
-    if !word_lists::HIDDEN_VERBS.is_empty() {
-        count += 1;
-    }
-    if !word_lists::CONJUNCTIONS.is_empty() {
-        count += 1;
-    }
-    if !word_lists::US_UK_PAIRS.is_empty() {
-        count += 1;
-    }
-    if !word_lists::HYPHEN_PATTERNS.is_empty() {
-        count += 1;
-    }
-    count
+    [
+        word_lists::GLUE_WORDS.len(),
+        word_lists::TRANSITION_WORDS.len(),
+        word_lists::TRANSITION_PHRASES.len(),
+        word_lists::VAGUE_WORDS.len(),
+        word_lists::VAGUE_PHRASES.len(),
+        word_lists::BUSINESS_JARGON.len(),
+        word_lists::CLICHES.len(),
+        word_lists::SENSORY_WORDS.len(),
+        word_lists::HIDDEN_VERBS.len(),
+        word_lists::CONJUNCTIONS.len(),
+        word_lists::US_UK_PAIRS.len(),
+        word_lists::HYPHEN_PATTERNS.len(),
+    ]
+    .iter()
+    .filter(|n| **n > 0)
+    .count()
 }
 
 /// Run diagnostics and report configuration status.
