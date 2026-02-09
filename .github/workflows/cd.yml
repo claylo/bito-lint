@@ -59,18 +59,27 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.1
 
       - name: Install musl tools
-        if: contains(matrix.build.target, 'musl')
+        if: contains(matrix.build.target, 'musl') && contains(matrix.build.target, 'x86_64')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
-      - name: Install cross-compilation tools
-        if: matrix.build.target == 'aarch64-unknown-linux-gnu'
-        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Install arm64 cross-compilation tools
+        if: contains(matrix.build.target, 'aarch64-unknown-linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          # musl cross-compiler for arm64
+          if [[ "${{ matrix.build.target }}" == *"musl"* ]]; then
+            sudo apt-get install -y musl-tools
+            # Use gcc as linker for musl arm64 cross-compilation
+          fi
 
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: stable
-          targets: ${{ matrix.build.target }}
+
+      - name: Add compilation target
+        run: rustup target add ${{ matrix.build.target }}
 
       - name: Rust cache
         uses: ./.github/actions/setup-rust-cache
@@ -86,8 +95,11 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          if [[ "${{ matrix.build.os }}" == "ubuntu-22.04" && "${{ matrix.build.target }}" == "aarch64-unknown-linux-gnu" ]]; then
+          if [[ "${{ matrix.build.target }}" == "aarch64-unknown-linux-gnu" ]]; then
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+          elif [[ "${{ matrix.build.target }}" == "aarch64-unknown-linux-musl" ]]; then
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
+            export CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
           fi
           cargo auditable build --release --locked --target ${{ matrix.build.target }}
 
