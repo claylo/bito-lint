@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.2] - 2026-02-09
+
+### Bug Fixes
+
+- *(build)* Help linux-arm64-gnu find the right ld (#3) by @claylo in [#3](https://github.com/claylo/bito-lint/pull/3)
+
+
+
+
+**Full Changelog**: [v0.1.1...v0.1.2](https://github.com/claylo/bito-lint/compare/v0.1.1...v0.1.2)
+
+
 ## [0.1.1] - 2026-02-09
 
 ### Bug Fixes
