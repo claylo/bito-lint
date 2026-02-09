@@ -38,3 +38,19 @@ pub mod word_lists;
 
 pub use config::{Config, ConfigLoader, Dialect, LogLevel};
 pub use error::{AnalysisError, AnalysisResult, ConfigError, ConfigResult};
+
+/// Default maximum input size: 5 MiB.
+pub const DEFAULT_MAX_INPUT_BYTES: usize = 5_242_880;
+
+/// Validate that input text does not exceed the configured size limit.
+///
+/// Pass `None` for `max_bytes` to skip validation.
+pub const fn validate_input_size(text: &str, max_bytes: Option<usize>) -> AnalysisResult<()> {
+    if let Some(max) = max_bytes {
+        let size = text.len();
+        if size > max {
+            return Err(AnalysisError::InputTooLarge { size, max });
+        }
+    }
+    Ok(())
+}

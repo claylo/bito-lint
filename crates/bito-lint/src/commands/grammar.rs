@@ -8,6 +8,8 @@ use tracing::{debug, instrument};
 
 use bito_lint_core::grammar;
 
+use super::read_input_file;
+
 /// Arguments for the `grammar` subcommand.
 #[derive(Args, Debug)]
 pub struct GrammarArgs {
@@ -25,11 +27,11 @@ pub fn cmd_grammar(
     args: GrammarArgs,
     global_json: bool,
     config_passive_max: Option<f64>,
+    max_input_bytes: Option<usize>,
 ) -> anyhow::Result<()> {
     debug!(file = %args.file, passive_max = ?args.passive_max, "executing grammar command");
 
-    let content = std::fs::read_to_string(args.file.as_std_path())
-        .with_context(|| format!("failed to read {}", args.file))?;
+    let content = read_input_file(&args.file, max_input_bytes)?;
 
     let strip_md = args.file.extension() == Some("md");
     let passive_max = args.passive_max.or(config_passive_max);

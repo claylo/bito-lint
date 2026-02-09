@@ -56,6 +56,10 @@ fn main() -> anyhow::Result<()> {
         "CLI initialized"
     );
 
+    let max_input = config
+        .max_input_bytes
+        .or(Some(bito_lint_core::DEFAULT_MAX_INPUT_BYTES));
+
     // Execute command
     let result = match cli.command {
         Commands::Analyze(args) => commands::analyze::cmd_analyze(
@@ -65,16 +69,22 @@ fn main() -> anyhow::Result<()> {
             config.max_grade,
             config.passive_max_percent,
             config.dialect,
+            max_input,
         ),
-        Commands::Tokens(args) => commands::tokens::cmd_tokens(args, cli.json, config.token_budget),
+        Commands::Tokens(args) => {
+            commands::tokens::cmd_tokens(args, cli.json, config.token_budget, max_input)
+        }
         Commands::Readability(args) => {
-            commands::readability::cmd_readability(args, cli.json, config.max_grade)
+            commands::readability::cmd_readability(args, cli.json, config.max_grade, max_input)
         }
-        Commands::Completeness(args) => {
-            commands::completeness::cmd_completeness(args, cli.json, config.templates.as_ref())
-        }
+        Commands::Completeness(args) => commands::completeness::cmd_completeness(
+            args,
+            cli.json,
+            config.templates.as_ref(),
+            max_input,
+        ),
         Commands::Grammar(args) => {
-            commands::grammar::cmd_grammar(args, cli.json, config.passive_max_percent)
+            commands::grammar::cmd_grammar(args, cli.json, config.passive_max_percent, max_input)
         }
         Commands::Doctor(args) => commands::doctor::cmd_doctor(args, cli.json, &cwd, &config),
         Commands::Info(args) => commands::info::cmd_info(args, cli.json, &config, &cwd),
@@ -82,7 +92,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Serve(args) => {
             let rt = tokio::runtime::Runtime::new()
                 .context("failed to create async runtime for MCP server")?;
-            rt.block_on(commands::serve::cmd_serve(args))
+            rt.block_on(commands::serve::cmd_serve(args, max_input))
         }
     };
     if let Err(ref err) = result {

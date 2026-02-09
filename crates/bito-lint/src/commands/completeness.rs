@@ -8,6 +8,8 @@ use tracing::{debug, instrument};
 
 use bito_lint_core::completeness::{self, SectionStatus};
 
+use super::read_input_file;
+
 /// Arguments for the `completeness` subcommand.
 #[derive(Args, Debug)]
 pub struct CompletenessArgs {
@@ -25,11 +27,11 @@ pub fn cmd_completeness(
     args: CompletenessArgs,
     global_json: bool,
     custom_templates: Option<&std::collections::HashMap<String, Vec<String>>>,
+    max_input_bytes: Option<usize>,
 ) -> anyhow::Result<()> {
     debug!(file = %args.file, template = %args.template, "executing completeness command");
 
-    let content = std::fs::read_to_string(args.file.as_std_path())
-        .with_context(|| format!("failed to read {}", args.file))?;
+    let content = read_input_file(&args.file, max_input_bytes)?;
 
     let report = completeness::check_completeness(&content, &args.template, custom_templates)
         .with_context(|| format!("failed to check completeness of {}", args.file))?;

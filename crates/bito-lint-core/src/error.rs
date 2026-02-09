@@ -36,6 +36,15 @@ pub enum AnalysisError {
         /// Comma-separated list of available template names.
         available: String,
     },
+
+    /// The input exceeds the configured maximum size.
+    #[error("input too large: {size} bytes exceeds limit of {max} bytes")]
+    InputTooLarge {
+        /// Actual size of the input in bytes.
+        size: usize,
+        /// Configured maximum size in bytes.
+        max: usize,
+    },
 }
 
 /// Result type alias using [`AnalysisError`].

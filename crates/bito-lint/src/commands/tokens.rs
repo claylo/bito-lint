@@ -8,6 +8,8 @@ use tracing::{debug, instrument};
 
 use bito_lint_core::tokens;
 
+use super::read_input_file;
+
 /// Arguments for the `tokens` subcommand.
 #[derive(Args, Debug)]
 pub struct TokensArgs {
@@ -25,11 +27,11 @@ pub fn cmd_tokens(
     args: TokensArgs,
     global_json: bool,
     config_budget: Option<usize>,
+    max_input_bytes: Option<usize>,
 ) -> anyhow::Result<()> {
     debug!(file = %args.file, budget = ?args.budget, "executing tokens command");
 
-    let content = std::fs::read_to_string(args.file.as_std_path())
-        .with_context(|| format!("failed to read {}", args.file))?;
+    let content = read_input_file(&args.file, max_input_bytes)?;
 
     let budget = args.budget.or(config_budget);
     let report = tokens::count_tokens(&content, budget)
