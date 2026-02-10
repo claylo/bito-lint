@@ -50,7 +50,7 @@ impl ColorChoice {
 
 const ENV_HELP: &str = "\
 ENVIRONMENT VARIABLES:
-    RUST_LOG                Log filter (e.g., debug, bito-lint=trace)
+    RUST_LOG               Log filter (e.g., debug, bito-lint=trace)
     BITO_LINT_LOG_PATH     Explicit log file path
     BITO_LINT_LOG_DIR      Log directory
 ";
