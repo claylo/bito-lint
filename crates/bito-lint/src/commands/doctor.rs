@@ -2,7 +2,8 @@
 
 use bito_lint_core::config::{self, Config};
 use bito_lint_core::dictionaries::{abbreviations, irregular_verbs, syllable_dict};
-use bito_lint_core::{tokens, word_lists};
+use bito_lint_core::tokens::{self, Backend};
+use bito_lint_core::word_lists;
 use clap::Args;
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
@@ -24,7 +25,7 @@ struct DoctorReport {
 
 #[derive(Serialize)]
 struct HealthChecks {
-    /// Whether the tiktoken tokenizer initializes successfully.
+    /// Whether the default tokenizer backend initializes successfully.
     tokenizer: bool,
     /// Size of the abbreviation dictionary.
     abbreviations: usize,
@@ -74,7 +75,7 @@ impl DoctorReport {
         let config_file = config::find_project_config(cwd);
 
         // Health checks
-        let tokenizer_ok = tokens::count_tokens("test", None).is_ok();
+        let tokenizer_ok = tokens::count_tokens("test", None, Backend::default()).is_ok();
 
         // Count word list collections (LazyLock sets that have a .len())
         let word_list_count = count_word_lists();
@@ -118,6 +119,11 @@ impl DoctorReport {
                         name: "BITO_LINT_DIALECT",
                         value: std::env::var("BITO_LINT_DIALECT").ok(),
                         description: "Dialect override (en-us, en-gb, en-ca, en-au)",
+                    },
+                    EnvVar {
+                        name: "BITO_LINT_TOKENIZER",
+                        value: std::env::var("BITO_LINT_TOKENIZER").ok(),
+                        description: "Tokenizer backend (claude, openai)",
                     },
                 ],
             },
@@ -245,7 +251,10 @@ pub fn cmd_doctor(
                 println!("  {} {}", "✗".red(), label);
             }
         };
-        check(report.health.tokenizer, "Tokenizer (cl100k_base)");
+        check(
+            report.health.tokenizer,
+            &format!("Tokenizer (default: {})", Backend::default()),
+        );
         check(
             report.health.abbreviations > 0,
             &format!(

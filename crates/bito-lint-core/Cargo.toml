@@ -41,8 +41,11 @@ schemars = "1.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
-tiktoken-rs = "0.9"
 tracing = "0.1"
+
+# Tokenizer backends
+aho-corasick = "1"
+bpe-openai = "0.3"
 
 [dev-dependencies]
 tempfile = "3.25"

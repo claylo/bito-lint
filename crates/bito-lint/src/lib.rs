@@ -53,6 +53,7 @@ ENVIRONMENT VARIABLES:
     RUST_LOG               Log filter (e.g., debug, bito-lint=trace)
     BITO_LINT_LOG_PATH     Explicit log file path
     BITO_LINT_LOG_DIR      Log directory
+    BITO_LINT_TOKENIZER    Tokenizer backend (claude, openai)
 ";
 /// Command-line interface definition for bito-lint.
 #[derive(Parser)]

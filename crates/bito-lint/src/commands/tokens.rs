@@ -6,7 +6,7 @@ use clap::Args;
 use owo_colors::OwoColorize;
 use tracing::{debug, instrument};
 
-use bito_lint_core::tokens;
+use bito_lint_core::tokens::{self, Backend};
 
 use super::read_input_file;
 
@@ -19,6 +19,10 @@ pub struct TokensArgs {
     /// Maximum token budget.
     #[arg(long)]
     pub budget: Option<usize>,
+
+    /// Tokenizer backend (claude or openai).
+    #[arg(long, value_enum)]
+    pub tokenizer: Option<Backend>,
 }
 
 /// Count tokens in a file and optionally check against a budget.
@@ -27,14 +31,16 @@ pub fn cmd_tokens(
     args: TokensArgs,
     global_json: bool,
     config_budget: Option<usize>,
+    config_tokenizer: Option<Backend>,
     max_input_bytes: Option<usize>,
 ) -> anyhow::Result<()> {
-    debug!(file = %args.file, budget = ?args.budget, "executing tokens command");
+    debug!(file = %args.file, budget = ?args.budget, tokenizer = ?args.tokenizer, "executing tokens command");
 
     let content = read_input_file(&args.file, max_input_bytes)?;
 
     let budget = args.budget.or(config_budget);
-    let report = tokens::count_tokens(&content, budget)
+    let backend = args.tokenizer.or(config_tokenizer).unwrap_or_default();
+    let report = tokens::count_tokens(&content, budget, backend)
         .with_context(|| format!("failed to count tokens in {}", args.file))?;
 
     if global_json {
