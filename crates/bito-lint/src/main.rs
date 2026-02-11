@@ -71,9 +71,13 @@ fn main() -> anyhow::Result<()> {
             config.dialect,
             max_input,
         ),
-        Commands::Tokens(args) => {
-            commands::tokens::cmd_tokens(args, cli.json, config.token_budget, max_input)
-        }
+        Commands::Tokens(args) => commands::tokens::cmd_tokens(
+            args,
+            cli.json,
+            config.token_budget,
+            config.tokenizer,
+            max_input,
+        ),
         Commands::Readability(args) => {
             commands::readability::cmd_readability(args, cli.json, config.max_grade, max_input)
         }

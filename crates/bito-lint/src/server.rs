@@ -22,6 +22,7 @@ use rmcp::schemars;
 use rmcp::{ErrorData as McpError, ServerHandler, tool, tool_handler, tool_router};
 
 use bito_lint_core::config::Dialect;
+use bito_lint_core::tokens::Backend;
 use bito_lint_core::{self as core, analysis, completeness, grammar, readability, tokens};
 
 /// Parameters for the `get_info` tool.
@@ -43,6 +44,8 @@ pub struct CountTokensParams {
     pub text: String,
     /// Optional maximum token budget.
     pub budget: Option<usize>,
+    /// Tokenizer backend: "claude" (default) or "openai".
+    pub tokenizer: Option<Backend>,
 }
 
 /// Parameters for the `check_readability` tool.
@@ -182,17 +185,20 @@ impl ProjectServer {
         Ok(CallToolResult::success(vec![Content::text(text)]))
     }
 
-    /// Count tokens in text using cl100k_base tokenizer (approximates Claude usage).
-    #[tool(description = "Count tokens in text. Returns token count and optional budget check.")]
+    /// Count tokens in text using the specified backend (default: claude).
+    #[tool(
+        description = "Count tokens in text. Returns token count and optional budget check. Supports 'claude' (default, conservative) and 'openai' (exact cl100k_base) backends."
+    )]
     #[tracing::instrument(skip(self, params), fields(otel.kind = "server"))]
     fn count_tokens(
         &self,
         #[allow(unused_variables)] Parameters(params): Parameters<CountTokensParams>,
     ) -> Result<CallToolResult, McpError> {
-        tracing::debug!(tool = "count_tokens", budget = ?params.budget, "executing MCP tool");
+        let backend = params.tokenizer.unwrap_or_default();
+        tracing::debug!(tool = "count_tokens", budget = ?params.budget, %backend, "executing MCP tool");
         self.validate_input(&params.text)?;
 
-        let report = tokens::count_tokens(&params.text, params.budget)
+        let report = tokens::count_tokens(&params.text, params.budget, backend)
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
         let json = serde_json::to_string_pretty(&report)
@@ -434,6 +440,7 @@ mod tests {
         let params = Parameters(CountTokensParams {
             text: "Hello, world!".to_string(),
             budget: Some(100),
+            tokenizer: None,
         });
 
         let result = server
@@ -584,8 +591,8 @@ mod tests {
         let json = serde_json::to_string_pretty(&tools).expect("serialization should work");
 
         // Count tokens using our own tokenizer
-        let report =
-            bito_lint_core::tokens::count_tokens(&json, None).expect("token counting should work");
+        let report = bito_lint_core::tokens::count_tokens(&json, None, Backend::default())
+            .expect("token counting should work");
 
         // Print breakdown for manual inspection
         println!("MCP tool schema token count: {}", report.count);
@@ -597,7 +604,8 @@ mod tests {
         for tool in &tools {
             let tool_json = serde_json::to_string_pretty(&tool).expect("serialize tool");
             let tool_report =
-                bito_lint_core::tokens::count_tokens(&tool_json, None).expect("count");
+                bito_lint_core::tokens::count_tokens(&tool_json, None, Backend::default())
+                    .expect("count");
             println!("  {} — {} tokens", tool.name, tool_report.count);
         }
 

@@ -40,6 +40,7 @@ use figment::providers::{Env, Format, Json, Serialized, Toml, Yaml};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::tokens::Backend;
 
 /// English dialect for spelling conventions.
 ///
@@ -107,6 +108,8 @@ pub struct Config {
     /// Prevents resource exhaustion from oversized inputs in both CLI and MCP server.
     /// Set to `null` / omit to disable the limit.
     pub max_input_bytes: Option<usize>,
+    /// Tokenizer backend (claude or openai). Defaults to claude.
+    pub tokenizer: Option<Backend>,
     /// Custom completeness templates (name → required section headings).
     ///
     /// These extend (not replace) the built-in templates (adr, handoff, design-doc).

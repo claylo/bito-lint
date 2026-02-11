@@ -8,7 +8,7 @@
 //! - [`config`] — Configuration loading and management
 //! - [`error`] — Error types and result aliases
 //! - [`markdown`] — Markdown processing (strip to prose, extract headings)
-//! - [`tokens`] — Token counting via tiktoken
+//! - [`tokens`] — Pluggable token counting (Claude / OpenAI backends)
 //! - [`readability`] — Flesch-Kincaid Grade Level scoring
 //! - [`completeness`] — Template section validation
 //! - [`grammar`] — Grammar checking and passive voice detection
@@ -19,7 +19,7 @@
 //! ```no_run
 //! use bito_lint_core::tokens;
 //!
-//! let report = tokens::count_tokens("Hello, world!", Some(100)).unwrap();
+//! let report = tokens::count_tokens("Hello, world!", Some(100), tokens::Backend::default()).unwrap();
 //! println!("Tokens: {}, over budget: {}", report.count, report.over_budget);
 //! ```
 #![deny(unsafe_code)]
@@ -38,6 +38,7 @@ pub mod word_lists;
 
 pub use config::{Config, ConfigLoader, Dialect, LogLevel};
 pub use error::{AnalysisError, AnalysisResult, ConfigError, ConfigResult};
+pub use tokens::Backend;
 
 /// Default maximum input size: 5 MiB.
 pub const DEFAULT_MAX_INPUT_BYTES: usize = 5_242_880;
