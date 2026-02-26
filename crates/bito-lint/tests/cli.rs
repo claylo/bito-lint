@@ -160,6 +160,26 @@ fn color_never_accepted() {
 }
 
 // =============================================================================
+// Analyze: --checks validation
+// =============================================================================
+
+#[test]
+fn unknown_check_name_fails() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tmp.path(), "The cat sat on the mat.").unwrap();
+    cmd()
+        .args([
+            "analyze",
+            tmp.path().to_str().unwrap(),
+            "--checks",
+            "readablity",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown check"));
+}
+
+// =============================================================================
 // Error Cases
 // =============================================================================
 

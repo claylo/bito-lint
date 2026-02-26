@@ -37,6 +37,15 @@ pub enum AnalysisError {
         available: String,
     },
 
+    /// One or more unknown check names were provided.
+    #[error("unknown check(s): {names}. Available: {available}")]
+    UnknownCheck {
+        /// Comma-separated list of unrecognised check names.
+        names: String,
+        /// Comma-separated list of valid check names.
+        available: String,
+    },
+
     /// The input exceeds the configured maximum size.
     #[error("input too large: {size} bytes exceeds limit of {max} bytes")]
     InputTooLarge {

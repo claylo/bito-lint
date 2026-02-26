@@ -66,9 +66,13 @@ fn main() -> anyhow::Result<()> {
         "CLI initialized"
     );
 
-    let max_input = config
-        .max_input_bytes
-        .or(Some(bito_lint_core::DEFAULT_MAX_INPUT_BYTES));
+    let max_input = if config.disable_input_limit {
+        None
+    } else {
+        config
+            .max_input_bytes
+            .or(Some(bito_lint_core::DEFAULT_MAX_INPUT_BYTES))
+    };
 
     // Execute command
     let result = match command {
