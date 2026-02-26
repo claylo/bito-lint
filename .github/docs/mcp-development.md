@@ -111,51 +111,10 @@ Add to Claude Code `settings.json` or `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "bito-lint": {
-      "command": "bito-lint",
-      "args": ["serve"]
+    "my-project": {
+      "command": "cargo",
+      "args": ["run", "--", "serve"]
     }
   }
 }
 ```
-
-## Context Budget
-
-bito-lint exposes 6 MCP tools totaling ~1,283 tokens of schema definitions (average 214 tokens per tool, largest is `analyze_writing` at 361 tokens). An integration test (`mcp_tool_schemas_fit_token_budget`) enforces a 4,000-token ceiling.
-
-Per-tool token costs (approximate):
-
-| Tool | Tokens |
-|------|--------|
-| `get_info` | ~150 |
-| `count_tokens` | ~170 |
-| `check_readability` | ~200 |
-| `check_completeness` | ~210 |
-| `check_grammar` | ~192 |
-| `analyze_writing` | ~361 |
-
-### MCP Tool Search (automatic lazy loading)
-
-Claude Code supports **MCP Tool Search** — when total MCP tool schemas exceed 10% of context, it automatically defers loading tool definitions until needed. With only 1,283 tokens, bito-lint falls well below this threshold in most configurations.
-
-If you run many MCP servers alongside bito-lint and want to ensure deferred loading:
-
-```bash
-# Lower the threshold to 5% of context
-ENABLE_TOOL_SEARCH=auto:5 claude
-
-# Or always enable tool search
-ENABLE_TOOL_SEARCH=true claude
-```
-
-You can also set this in your project's `settings.json`:
-
-```json
-{
-  "env": {
-    "ENABLE_TOOL_SEARCH": "auto:5"
-  }
-}
-```
-
-**Recommendation:** For general coding sessions where quality gates aren't the primary focus, enabling tool search preserves ~1,283 tokens of context. For documentation-heavy sessions where bito-lint tools are used frequently, eager loading (the default) avoids the search overhead.

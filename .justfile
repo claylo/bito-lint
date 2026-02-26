@@ -72,6 +72,7 @@ bootstrap:
     echo ""
 
 
+
     # Configure repository settings via gh-coda
     if command -v gh &>/dev/null && gh extension list 2>/dev/null | grep -q coda; then
         echo "⚙️  Applying repository settings (gh coda)..."
@@ -167,6 +168,7 @@ mdfix *files='':
 
 
 
+
 # Pre-release validation
 release-check:
     #!/usr/bin/env zsh
@@ -220,12 +222,12 @@ update:
 
 # Upgrade Cargo.toml to latest compatible versions
 upgrade:
-    cargo upgrade --workspace
+    cargo upgrade
     cargo update --workspace
 
 # The nuclear option: upgrade to latest incompatible versions (breaking changes)
 upgrade-breaking:
-    cargo upgrade --workspace --incompatible
+    cargo upgrade --incompatible
     cargo update --workspace
 
 # See what WOULD update without doing it

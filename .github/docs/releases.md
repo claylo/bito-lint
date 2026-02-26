@@ -104,7 +104,7 @@ Triggered by version tags (`v*.*.*`). Builds binaries for multiple platforms and
 | `HOMEBREW_ENABLED` | Update Homebrew formula | `HOMEBREW_COMMITTER_TOKEN` |
 | `DEB_ENABLED` | Build Debian packages | — |
 | `RPM_ENABLED` | Build RPM packages | — |
-| `NPM_ENABLED` | Publish to npm (OIDC) | — (uses trusted publishing) |
+| `NPM_ENABLED` | Publish to npm | `NPM_TOKEN` |
 | `SBOM_ENABLED` | Generate CycloneDX SBOM | — |
 | `GPG_SIGNING_ENABLED` | Sign artifacts | `GPG_RELEASE_KEY`, `GPG_PASSPHRASE` |
 
@@ -129,14 +129,19 @@ For crates.io publishing:
 gh secret set CARGO_TOKEN
 ```
 
-For GPG signing — the armored private key must be base64-encoded before storing as a secret (GitHub secrets strip newlines, which breaks PEM formatting):
+For GPG signing:
 
 ```bash
-gpg --export-secret-keys --armor YOUR_KEY_ID | base64 | gh secret set GPG_RELEASE_KEY --app actions
+# Export your GPG key
+gpg --export-secret-keys --armor YOUR_KEY_ID | base64 > key.txt
+
+# Set secrets
+gh secret set GPG_RELEASE_KEY < key.txt
 gh secret set GPG_PASSPHRASE
+rm key.txt
 ```
 
-For Homebrew (requires a PAT with `repo` and `workflow` scopes on your tap repo):
+For Homebrew (requires a PAT with repo scope on your tap repo):
 
 ```bash
 gh secret set HOMEBREW_COMMITTER_TOKEN
@@ -144,63 +149,52 @@ gh secret set HOMEBREW_COMMITTER_TOKEN
 
 ### Setting Up Homebrew Distribution
 
-The CD workflow generates a multi-platform Homebrew formula from release artifacts and pushes it to your tap via the GitHub API. Users get pre-built binaries — no compilation required.
+1. Create a tap repository: `homebrew-tap` (e.g., `yourname/homebrew-tap`)
 
-1. Create a tap repository (e.g., `yourname/homebrew-brew`)
-
-2. Create an initial placeholder formula. The CD workflow will overwrite it on first release, but the file must exist so `brew tap` can discover it. A minimal placeholder:
+2. Create an initial formula `Formula/bito-lint.rb`:
 
 ```ruby
-# typed: true
-# frozen_string_literal: true
-
-class YourTool < Formula
-  desc "Your tool description"
-  homepage "https://github.com/yourname/your-tool"
-  version "0.0.0"
-  license "MIT"
+class Bitolint < Formula
+  desc "Quality gate tooling for building-in-the-open artifacts"
+  homepage "https://github.com/claylo/bito-lint"
+  version "0.1.0"
+  license "['Apache-2.0', 'MIT']"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/yourname/your-tool/releases/download/v#{version}/your-tool-#{version}-aarch64-apple-darwin.tar.gz"
-      sha256 "placeholder"
+      url "https://github.com/claylo/bito-lint/releases/download/v#{version}/bito-lint-#{version}-aarch64-apple-darwin.tar.gz"
+      sha256 "PLACEHOLDER"
     else
-      url "https://github.com/yourname/your-tool/releases/download/v#{version}/your-tool-#{version}-x86_64-apple-darwin.tar.gz"
-      sha256 "placeholder"
+      url "https://github.com/claylo/bito-lint/releases/download/v#{version}/bito-lint-#{version}-x86_64-apple-darwin.tar.gz"
+      sha256 "PLACEHOLDER"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/yourname/your-tool/releases/download/v#{version}/your-tool-#{version}-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "placeholder"
+      url "https://github.com/claylo/bito-lint/releases/download/v#{version}/bito-lint-#{version}-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "PLACEHOLDER"
     else
-      url "https://github.com/yourname/your-tool/releases/download/v#{version}/your-tool-#{version}-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "placeholder"
+      url "https://github.com/claylo/bito-lint/releases/download/v#{version}/bito-lint-#{version}-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "PLACEHOLDER"
     end
   end
 
   def install
-    bin.install "bin/your-tool"
+    bin.install "bin/bito-lint"
     man1.install Dir["share/man/man1/*.1"]
-    bash_completion.install "share/completions/your-tool.bash" => "your-tool"
-    zsh_completion.install "share/completions/_your-tool"
-    fish_completion.install "share/completions/your-tool.fish"
+    bash_completion.install "share/completions/bito-lint.bash" => "bito-lint"
+    zsh_completion.install "share/completions/_bito-lint"
+    fish_completion.install "share/completions/bito-lint.fish"
   end
 
   test do
-    assert_match version.to_s, shell_output("#{bin}/your-tool --version")
+    assert_match version.to_s, shell_output("#{bin}/bito-lint --version")
   end
 end
 ```
 
-3. On each release, the CD workflow downloads the `.sha256` files from the release, generates the full formula with correct checksums, and pushes it to the tap via the GitHub API.
-
-4. Enable the workflow:
-
-```bash
-gh variable set HOMEBREW_ENABLED --body "true"
-```
+3. After your first release, the `mislav/bump-homebrew-formula-action` will update the version and SHA256 automatically
 
 ### Setting Up Debian Package Distribution
 
@@ -210,22 +204,22 @@ gh variable set HOMEBREW_ENABLED --body "true"
 
 ```toml
 [package.metadata.deb]
-maintainer = "Your Name <your-email@example.com>"
-copyright = "Your Name"
+maintainer = "Clay Loveless <your-email@example.com>"
+copyright = "Clay Loveless"
 license-file = ["LICENSE-MIT", "4"]
 extended-description = """\
-Your tool description"""
+Quality gate tooling for building-in-the-open artifacts"""
 section = "utility"
 priority = "optional"
 assets = [
     # Binary
-    ["target/release/your-tool", "usr/bin/", "755"],
+    ["target/release/bito-lint", "usr/bin/", "755"],
     # Man pages (if using xtask)
     ["target/dist/share/man/man1/*", "usr/share/man/man1/", "644"],
     # Shell completions
-    ["target/dist/share/completions/your-tool.bash", "usr/share/bash-completion/completions/your-tool", "644"],
-    ["target/dist/share/completions/_your-tool", "usr/share/zsh/vendor-completions/", "644"],
-    ["target/dist/share/completions/your-tool.fish", "usr/share/fish/vendor_completions.d/", "644"],
+    ["target/dist/share/completions/bito-lint.bash", "usr/share/bash-completion/completions/bito-lint", "644"],
+    ["target/dist/share/completions/_bito-lint", "usr/share/zsh/vendor-completions/", "644"],
+    ["target/dist/share/completions/bito-lint.fish", "usr/share/fish/vendor_completions.d/", "644"],
 ]
 ```
 
@@ -245,13 +239,13 @@ gh variable set DEB_ENABLED --body "true"
 [package.metadata.generate-rpm]
 assets = [
     # Binary
-    { source = "target/release/your-tool", dest = "/usr/bin/your-tool", mode = "755" },
+    { source = "target/release/bito-lint", dest = "/usr/bin/bito-lint", mode = "755" },
     # Man pages (if using xtask)
     { source = "target/dist/share/man/man1/*", dest = "/usr/share/man/man1/", mode = "644", doc = true },
     # Shell completions
-    { source = "target/dist/share/completions/your-tool.bash", dest = "/usr/share/bash-completion/completions/your-tool", mode = "644" },
-    { source = "target/dist/share/completions/_your-tool", dest = "/usr/share/zsh/site-functions/_your-tool", mode = "644" },
-    { source = "target/dist/share/completions/your-tool.fish", dest = "/usr/share/fish/vendor_completions.d/your-tool.fish", mode = "644" },
+    { source = "target/dist/share/completions/bito-lint.bash", dest = "/usr/share/bash-completion/completions/bito-lint", mode = "644" },
+    { source = "target/dist/share/completions/_bito-lint", dest = "/usr/share/zsh/site-functions/_bito-lint", mode = "644" },
+    { source = "target/dist/share/completions/bito-lint.fish", dest = "/usr/share/fish/vendor_completions.d/bito-lint.fish", mode = "644" },
 ]
 
 [package.metadata.generate-rpm.requires]
@@ -269,81 +263,37 @@ gh variable set RPM_ENABLED --body "true"
 
 npm distribution uses platform-specific packages with a wrapper package that handles binary resolution. This approach (inspired by [Sentry's strategy](https://sentry.engineering/blog/publishing-binaries-on-npm)) ensures compatibility across all npm environments.
 
-#### Authentication: Trusted Publishing (OIDC)
-
-The CD workflow uses [npm trusted publishing](https://docs.npmjs.com/trusted-publishers) instead of long-lived tokens. This uses GitHub Actions' OIDC identity to authenticate with npm — no secrets to store or rotate.
-
-**First-time bootstrap** (one-time manual step, because npm requires packages to exist before you can configure trusted publishing):
-
-1. Create a [granular access token](https://docs.npmjs.com/about-access-tokens) on npmjs.com scoped to your packages with Publish permission. This bypasses 2FA for the initial publish.
-
-2. Publish all packages manually:
-
-```bash
-# Set the token
-export NODE_AUTH_TOKEN="your-granular-token"
-
-# Publish platform packages first
-for dir in npm/platforms/*/; do
-    cd "$dir" && npm publish --access public && cd -
-done
-
-# Then the main wrapper
-cd npm/your-tool && npm publish --access public
-```
-
-3. Configure trusted publishing on each package at npmjs.com:
-   - Go to package settings → Trusted Publishers → Add
-   - Repository owner: `yourname`
-   - Repository name: `your-tool`
-   - Workflow filename: `cd.yml`
-   - Environment: (leave blank)
-
-4. Delete the granular access token — you won't need it again.
-
-5. Enable the workflow:
-
-```bash
-gh variable set NPM_ENABLED --body "true"
-```
-
-From this point on, `cd.yml` authenticates via OIDC and publishes with `--provenance`, which generates signed provenance attestations automatically.
-
-**Requirements:** npm >= 11.5.1 (the workflow installs `npm@latest` since Node 20 ships with npm 10.x). Only cloud-hosted GitHub Actions runners are supported — self-hosted runners cannot use OIDC trusted publishing.
-
 #### Package Structure
 
 ```
 npm/
-├── your-tool/                    # Main wrapper package
+├── bito-lint/                    # Main wrapper package
 │   ├── package.json
-│   ├── index.js                  # Binary resolution
-│   ├── cli.js                    # CLI entry point
-│   └── install.js                # Postinstall fallback
+│   ├── index.js                           # Binary resolution
+│   ├── cli.js                             # CLI entry point
+│   └── install.js                         # Postinstall fallback
 └── platforms/
-    ├── your-tool-darwin-arm64/
+    ├── bito-lint-darwin-arm64/
     │   ├── package.json
-    │   └── bin/.gitkeep
-    ├── your-tool-darwin-x64/
-    ├── your-tool-linux-arm64/
-    ├── your-tool-linux-x64/
-    ├── your-tool-win32-arm64/
-    └── your-tool-win32-x64/
+    │   └── bin/bito-lint
+    ├── bito-lint-darwin-x64/
+    ├── bito-lint-linux-arm64/
+    ├── bito-lint-linux-x64/
+    ├── bito-lint-win32-arm64/
+    └── bito-lint-win32-x64/
 ```
 
-Platform `bin/` directories contain `.gitkeep` placeholders. The CD workflow extracts actual binaries from release tarballs at publish time.
-
-#### Platform Package (e.g., `npm/platforms/your-tool-linux-x64/package.json`)
+#### Platform Package (e.g., `npm/platforms/bito-lint-linux-x64/package.json`)
 
 ```json
 {
-  "name": "@yourscope/your-tool-linux-x64",
+  "name": "@claylo/bito-lint-linux-x64",
   "version": "0.1.0",
-  "description": "Your tool description (linux-x64 binary)",
-  "license": "MIT",
+  "description": "Quality gate tooling for building-in-the-open artifacts (linux-x64 binary)",
+  "license": "['Apache-2.0', 'MIT']",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourname/your-tool"
+    "url": "https://github.com/claylo/bito-lint"
   },
   "os": ["linux"],
   "cpu": ["x64"],
@@ -354,49 +304,49 @@ Platform `bin/` directories contain `.gitkeep` placeholders. The CD workflow ext
 Valid `os` values: `"linux"`, `"darwin"`, `"win32"`
 Valid `cpu` values: `"x64"`, `"arm64"`
 
-#### Main Wrapper Package (`npm/your-tool/package.json`)
+#### Main Wrapper Package (`npm/bito-lint/package.json`)
 
 ```json
 {
-  "name": "@yourscope/your-tool",
+  "name": "@claylo/bito-lint",
   "version": "0.1.0",
-  "description": "Your tool description",
-  "license": "MIT",
+  "description": "Quality gate tooling for building-in-the-open artifacts",
+  "license": "['Apache-2.0', 'MIT']",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourname/your-tool"
+    "url": "https://github.com/claylo/bito-lint"
   },
   "bin": {
-    "your-tool": "cli.js"
+    "bito-lint": "cli.js"
   },
   "scripts": {
     "postinstall": "node install.js"
   },
   "files": ["index.js", "cli.js", "install.js"],
   "optionalDependencies": {
-    "@yourscope/your-tool-darwin-arm64": "0.1.0",
-    "@yourscope/your-tool-darwin-x64": "0.1.0",
-    "@yourscope/your-tool-linux-arm64": "0.1.0",
-    "@yourscope/your-tool-linux-x64": "0.1.0",
-    "@yourscope/your-tool-win32-arm64": "0.1.0",
-    "@yourscope/your-tool-win32-x64": "0.1.0"
+    "@claylo/bito-lint-darwin-arm64": "0.1.0",
+    "@claylo/bito-lint-darwin-x64": "0.1.0",
+    "@claylo/bito-lint-linux-arm64": "0.1.0",
+    "@claylo/bito-lint-linux-x64": "0.1.0",
+    "@claylo/bito-lint-win32-arm64": "0.1.0",
+    "@claylo/bito-lint-win32-x64": "0.1.0"
   }
 }
 ```
 
-#### Binary Resolution (`npm/your-tool/index.js`)
+#### Binary Resolution (`npm/bito-lint/index.js`)
 
 ```javascript
 const path = require("path");
 const fs = require("fs");
 
 const PLATFORMS = {
-  "darwin-arm64": "@yourscope/your-tool-darwin-arm64",
-  "darwin-x64": "@yourscope/your-tool-darwin-x64",
-  "linux-arm64": "@yourscope/your-tool-linux-arm64",
-  "linux-x64": "@yourscope/your-tool-linux-x64",
-  "win32-arm64": "@yourscope/your-tool-win32-arm64",
-  "win32-x64": "@yourscope/your-tool-win32-x64",
+  "darwin-arm64": "@claylo/bito-lint-darwin-arm64",
+  "darwin-x64": "@claylo/bito-lint-darwin-x64",
+  "linux-arm64": "@claylo/bito-lint-linux-arm64",
+  "linux-x64": "@claylo/bito-lint-linux-x64",
+  "win32-arm64": "@claylo/bito-lint-win32-arm64",
+  "win32-x64": "@claylo/bito-lint-win32-x64",
 };
 
 function getBinaryPath() {
@@ -407,7 +357,7 @@ function getBinaryPath() {
     throw new Error(`Unsupported platform: ${platformKey}`);
   }
 
-  const binaryName = process.platform === "win32" ? "your-tool.exe" : "your-tool";
+  const binaryName = process.platform === "win32" ? "bito-lint.exe" : "bito-lint";
 
   // Try optionalDependency first
   try {
@@ -425,15 +375,15 @@ function getBinaryPath() {
   }
 
   throw new Error(
-    `Could not find your-tool binary. ` +
-    `Try reinstalling @yourscope/your-tool`
+    `Could not find bito-lint binary. ` +
+    `Try reinstalling @claylo/bito-lint`
   );
 }
 
 module.exports = { getBinaryPath };
 ```
 
-#### CLI Entry Point (`npm/your-tool/cli.js`)
+#### CLI Entry Point (`npm/bito-lint/cli.js`)
 
 ```javascript
 #!/usr/bin/env node
@@ -447,7 +397,7 @@ const child = spawn(getBinaryPath(), process.argv.slice(2), {
 child.on("close", (code) => process.exit(code ?? 0));
 ```
 
-#### Postinstall Fallback (`npm/your-tool/install.js`)
+#### Postinstall Fallback (`npm/bito-lint/install.js`)
 
 ```javascript
 const https = require("https");
@@ -456,12 +406,12 @@ const path = require("path");
 const zlib = require("zlib");
 
 const PLATFORMS = {
-  "darwin-arm64": "@yourscope/your-tool-darwin-arm64",
-  "darwin-x64": "@yourscope/your-tool-darwin-x64",
-  "linux-arm64": "@yourscope/your-tool-linux-arm64",
-  "linux-x64": "@yourscope/your-tool-linux-x64",
-  "win32-arm64": "@yourscope/your-tool-win32-arm64",
-  "win32-x64": "@yourscope/your-tool-win32-x64",
+  "darwin-arm64": "@claylo/bito-lint-darwin-arm64",
+  "darwin-x64": "@claylo/bito-lint-darwin-x64",
+  "linux-arm64": "@claylo/bito-lint-linux-arm64",
+  "linux-x64": "@claylo/bito-lint-linux-x64",
+  "win32-arm64": "@claylo/bito-lint-win32-arm64",
+  "win32-x64": "@claylo/bito-lint-win32-x64",
 };
 
 async function install() {
@@ -487,7 +437,7 @@ async function install() {
   const tarball = await download(tarballUrl);
   const files = extractTar(zlib.gunzipSync(tarball));
 
-  const binaryName = process.platform === "win32" ? "your-tool.exe" : "your-tool";
+  const binaryName = process.platform === "win32" ? "bito-lint.exe" : "bito-lint";
   const binaryEntry = files.find((f) => f.name.endsWith(`/bin/${binaryName}`));
 
   if (!binaryEntry) {
@@ -540,38 +490,52 @@ install().catch((err) => {
 });
 ```
 
+#### Enabling npm Publishing
+
+1. Create an npm organization or use your username as scope
+2. Create an automation token at [npmjs.com/settings/tokens](https://www.npmjs.com/settings/tokens)
+3. Set up the secret and variable:
+
+```bash
+gh secret set NPM_TOKEN
+gh variable set NPM_ENABLED --body "true"
+```
+
+**Note:** The CD workflow publishes all packages. You may need to customize `cd.yml` to publish platform packages first, then the main wrapper.
+
 ## Build Features
 
 ### Release Tarball Structure
 
-Each release tarball contains (paths are relative to the archive root):
+Each release tarball contains:
 
 ```
-bin/
-└── your-tool               # The compiled binary
-share/
+bito-lint-{version}-{target}/
+├── bin/
+│   └── bito-lint          # The compiled binary
+├── share/
 │   ├── man/
 │   │   └── man1/
-│   │       ├── your-tool.1          # Main command man page
-│   │       └── your-tool-*.1        # Subcommand man pages
+│   │       ├── bito-lint.1           # Main command man page
+│   │       └── bito-lint-*.1         # Subcommand man pages
 │   └── completions/
-│       ├── your-tool.bash           # Bash completions
-│       ├── your-tool.fish           # Fish completions
-│       ├── your-tool.ps1            # PowerShell completions
-│       └── _your-tool               # Zsh completions
-LICENSE-*
-README.md
-CHANGELOG.md
+│       ├── bito-lint.bash            # Bash completions
+│       ├── bito-lint.fish            # Fish completions
+│       ├── bito-lint.ps1             # PowerShell completions
+│       └── _bito-lint                # Zsh completions
+├── LICENSE-*
+├── README.md
+└── CHANGELOG.md
 ```
 
-This structure follows [XDG conventions](https://specifications.freedesktop.org/basedir-spec/latest/) and is compatible with Homebrew's standard installation methods. The tarball has no top-level directory — files are at the root.
+This structure follows [XDG conventions](https://specifications.freedesktop.org/basedir-spec/latest/) and is compatible with Homebrew's standard installation methods.
 
 ### cargo-auditable
 
 All release builds use [cargo-auditable](https://github.com/rust-secure-code/cargo-auditable) to embed dependency information in the binary. This enables vulnerability scanning of deployed binaries:
 
 ```bash
-cargo audit bin ./target/release/your-tool
+cargo audit bin ./target/release/bito-lint
 ```
 
 ### CycloneDX SBOM
@@ -585,7 +549,7 @@ Tags containing a hyphen are treated as pre-releases:
 - `v1.0.0` → Full release
 - `v1.0.0-beta.1` → Pre-release (marked as such on GitHub)
 
-Pre-releases skip crates.io, Homebrew, and npm publishing but still build and upload binaries.
+Pre-releases skip Homebrew formula updates but are published to other registries.
 
 ## Troubleshooting
 
@@ -615,27 +579,12 @@ Most publishing jobs require their respective `*_ENABLED` variable to be set. Ch
 gh variable list
 ```
 
-### GPG signing fails with "base64: invalid input"
+### GPG signing fails
 
-The `GPG_RELEASE_KEY` secret must contain the base64-encoded armored key, not the raw armored key. GitHub secrets strip newlines, which breaks PEM formatting. Encode before storing:
+Ensure the key is base64-encoded:
 
 ```bash
-gpg --export-secret-keys --armor KEY_ID | base64 | gh secret set GPG_RELEASE_KEY --app actions
+gpg --export-secret-keys --armor KEY_ID | base64 -w0
 ```
 
-### Homebrew formula not updating
-
-The CD workflow pushes to the tap via the GitHub API using `HOMEBREW_COMMITTER_TOKEN`. Verify that:
-
-1. The token has `repo` and `workflow` scopes
-2. The formula file exists in `Formula/your-tool.rb` in the tap repo
-3. The release includes `.sha256` files for all platform tarballs
-
-### npm publish fails with 401/403
-
-If using trusted publishing (OIDC), verify that:
-
-1. Each package has a trusted publisher configured on npmjs.com pointing to your repo and workflow
-2. The workflow has `id-token: write` permission
-3. You're using npm >= 11.5.1 (the workflow installs `npm@latest`)
-4. You're running on a cloud-hosted GitHub Actions runner (self-hosted runners don't support OIDC)
+And that `GPG_PASSPHRASE` matches the key's passphrase.

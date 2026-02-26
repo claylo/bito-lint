@@ -13,6 +13,16 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     cli.color.apply();
 
+    if cli.version_only {
+        println!("{}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
+    // arg_required_else_help ensures we have --version-only or a subcommand
+    let Some(command) = cli.command else {
+        return Ok(());
+    };
+
     if let Some(ref dir) = cli.chdir {
         std::env::set_current_dir(dir)
             .with_context(|| format!("failed to change directory to {}", dir.display()))?;
@@ -61,7 +71,7 @@ fn main() -> anyhow::Result<()> {
         .or(Some(bito_lint_core::DEFAULT_MAX_INPUT_BYTES));
 
     // Execute command
-    let result = match cli.command {
+    let result = match command {
         Commands::Analyze(args) => commands::analyze::cmd_analyze(
             args,
             cli.json,
