@@ -59,12 +59,16 @@ ENVIRONMENT VARIABLES:
 #[derive(Parser)]
 #[command(name = "bito-lint")]
 #[command(about = "Quality gate tooling for building-in-the-open artifacts", long_about = None)]
-#[command(version)]
+#[command(version, arg_required_else_help = true)]
 #[command(after_long_help = ENV_HELP)]
 pub struct Cli {
     /// The subcommand to execute.
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
+
+    /// Print only the version number (for scripting)
+    #[arg(long)]
+    pub version_only: bool,
 
     /// Path to configuration file (overrides discovery)
     #[arg(short, long, global = true, value_name = "FILE")]

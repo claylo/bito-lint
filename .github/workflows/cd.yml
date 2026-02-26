@@ -23,7 +23,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
 
@@ -32,7 +32,7 @@ jobs:
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Generate changelog
-        uses: orhun/git-cliff-action@e16f179f0be49ecdfe63753837f20b9531642772 # v4.7.0
+        uses: orhun/git-cliff-action@c93ef52f3d0ddcdcc9bd5447d98d458a11cd4f72 # v4.7.1
         id: git-cliff
         with:
           config: cliff.toml
@@ -80,7 +80,7 @@ jobs:
             }
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install musl tools
         if: contains(matrix.build.target, 'musl') && contains(matrix.build.target, 'x86_64')
@@ -195,7 +195,7 @@ jobs:
 
       - name: Upload release
         if: ${{ !contains(github.ref, '-') }}
-        uses: svenstaro/upload-release-action@6b7fa9f267e90b50a19fef07b3596790bb941741 # 2.11.3
+        uses: svenstaro/upload-release-action@b98a3b12e86552593f3e4e577ca8a62aa2f3f22b # 2.11.4
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ env.PROJECT_NAME }}-${{ needs.generate-changelog.outputs.version }}-${{ matrix.build.target }}*
@@ -207,7 +207,7 @@ jobs:
 
       - name: Upload pre-release
         if: ${{ contains(github.ref, '-') }}
-        uses: svenstaro/upload-release-action@6b7fa9f267e90b50a19fef07b3596790bb941741 # 2.11.3
+        uses: svenstaro/upload-release-action@b98a3b12e86552593f3e4e577ca8a62aa2f3f22b # 2.11.4
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ env.PROJECT_NAME }}-${{ needs.generate-changelog.outputs.version }}-${{ matrix.build.target }}*
@@ -218,7 +218,7 @@ jobs:
           prerelease: true
 
       - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        uses: actions/attest-build-provenance@e4d4f7c39adfa4c260fb5c147f0622000aa14b99 # v4.0.0
         with:
           subject-path: ${{ env.PROJECT_NAME }}-${{ needs.generate-changelog.outputs.version }}-${{ matrix.build.target }}*
 
@@ -229,7 +229,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -246,7 +246,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.generate-changelog.outputs.version }}
-      TAP_REPO: claylo/homebrew-brew
     steps:
       - name: Download SHA256 checksums
         env:
@@ -271,51 +270,49 @@ jobs:
           SHA_LINUX_X64=$(get_sha "x86_64-unknown-linux-gnu")
 
           cat > formula.rb <<RUBY
-          # typed: true
-          # frozen_string_literal: true
+# typed: true
+# frozen_string_literal: true
 
-          class BitoLint < Formula
-            desc "Quality gate tooling for building-in-the-open artifacts"
-            homepage "https://github.com/${{ github.repository }}"
-            version "${VERSION}"
-            license "MIT"
+class BitoLint < Formula
+  desc "Quality gate tooling for building-in-the-open artifacts"
+  homepage "https://github.com/${{ github.repository }}"
+  version "${VERSION}"
+  license "MIT"
 
-            on_macos do
-              if Hardware::CPU.arm?
-                url "https://github.com/${{ github.repository }}/releases/download/v#{version}/${PROJECT_NAME}-#{version}-aarch64-apple-darwin.tar.gz"
-                sha256 "${SHA_DARWIN_ARM64}"
-              else
-                url "https://github.com/${{ github.repository }}/releases/download/v#{version}/${PROJECT_NAME}-#{version}-x86_64-apple-darwin.tar.gz"
-                sha256 "${SHA_DARWIN_X64}"
-              end
-            end
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/${{ github.repository }}/releases/download/v#{version}/${PROJECT_NAME}-#{version}-aarch64-apple-darwin.tar.gz"
+      sha256 "${SHA_DARWIN_ARM64}"
+    else
+      url "https://github.com/${{ github.repository }}/releases/download/v#{version}/${PROJECT_NAME}-#{version}-x86_64-apple-darwin.tar.gz"
+      sha256 "${SHA_DARWIN_X64}"
+    end
+  end
 
-            on_linux do
-              if Hardware::CPU.arm?
-                url "https://github.com/${{ github.repository }}/releases/download/v#{version}/${PROJECT_NAME}-#{version}-aarch64-unknown-linux-gnu.tar.gz"
-                sha256 "${SHA_LINUX_ARM64}"
-              else
-                url "https://github.com/${{ github.repository }}/releases/download/v#{version}/${PROJECT_NAME}-#{version}-x86_64-unknown-linux-gnu.tar.gz"
-                sha256 "${SHA_LINUX_X64}"
-              end
-            end
+  on_linux do
+    if Hardware::CPU.arm?
+      url "https://github.com/${{ github.repository }}/releases/download/v#{version}/${PROJECT_NAME}-#{version}-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "${SHA_LINUX_ARM64}"
+    else
+      url "https://github.com/${{ github.repository }}/releases/download/v#{version}/${PROJECT_NAME}-#{version}-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "${SHA_LINUX_X64}"
+    end
+  end
 
-            def install
-              bin.install "bin/${PROJECT_NAME}"
-              man1.install Dir["share/man/man1/*.1"]
-              bash_completion.install "share/completions/${PROJECT_NAME}.bash" => "${PROJECT_NAME}"
-              zsh_completion.install "share/completions/_${PROJECT_NAME}"
-              fish_completion.install "share/completions/${PROJECT_NAME}.fish"
-            end
+  def install
+    bin.install "bin/${PROJECT_NAME}"
+    man1.install Dir["share/man/man1/*.1"]
+    bash_completion.install "share/completions/${PROJECT_NAME}.bash" => "${PROJECT_NAME}"
+    zsh_completion.install "share/completions/_${PROJECT_NAME}"
+    fish_completion.install "share/completions/${PROJECT_NAME}.fish"
+  end
 
-            test do
-              assert_match version.to_s, shell_output("\#{bin}/${PROJECT_NAME} info --version-only")
-            end
-          end
-          RUBY
+  test do
+    assert_match version.to_s, shell_output("\#{bin}/${PROJECT_NAME} --version-only")
+  end
+end
+RUBY
 
-          # Strip heredoc indentation
-          sed -i 's/^          //' formula.rb
           echo "Generated formula:"
           cat formula.rb
 
@@ -323,6 +320,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_COMMITTER_TOKEN }}
         run: |
+          TAP_REPO="${{ vars.HOMEBREW_TAP }}"
           gh api "repos/${TAP_REPO}/contents/Formula/${PROJECT_NAME}.rb" \
             --jq '.sha' > /tmp/old_sha 2>/dev/null || true
 
@@ -348,7 +346,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -379,7 +377,7 @@ jobs:
 
       - name: Upload release
         if: ${{ !contains(github.ref, '-') }}
-        uses: svenstaro/upload-release-action@6b7fa9f267e90b50a19fef07b3596790bb941741 # 2.11.3
+        uses: svenstaro/upload-release-action@b98a3b12e86552593f3e4e577ca8a62aa2f3f22b # 2.11.4
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ env.PROJECT_NAME }}-${{ needs.generate-changelog.outputs.version }}.deb*
@@ -391,7 +389,7 @@ jobs:
 
       - name: Upload pre-release
         if: ${{ contains(github.ref, '-') }}
-        uses: svenstaro/upload-release-action@6b7fa9f267e90b50a19fef07b3596790bb941741 # 2.11.3
+        uses: svenstaro/upload-release-action@b98a3b12e86552593f3e4e577ca8a62aa2f3f22b # 2.11.4
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ env.PROJECT_NAME }}-${{ needs.generate-changelog.outputs.version }}.deb*
@@ -408,7 +406,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
@@ -439,7 +437,7 @@ jobs:
 
       - name: Upload release
         if: ${{ !contains(github.ref, '-') }}
-        uses: svenstaro/upload-release-action@6b7fa9f267e90b50a19fef07b3596790bb941741 # 2.11.3
+        uses: svenstaro/upload-release-action@b98a3b12e86552593f3e4e577ca8a62aa2f3f22b # 2.11.4
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ env.PROJECT_NAME }}-${{ needs.generate-changelog.outputs.version }}.x86_64.rpm*
@@ -451,7 +449,7 @@ jobs:
 
       - name: Upload pre-release
         if: ${{ contains(github.ref, '-') }}
-        uses: svenstaro/upload-release-action@6b7fa9f267e90b50a19fef07b3596790bb941741 # 2.11.3
+        uses: svenstaro/upload-release-action@b98a3b12e86552593f3e4e577ca8a62aa2f3f22b # 2.11.4
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ env.PROJECT_NAME }}-${{ needs.generate-changelog.outputs.version }}.x86_64.rpm*
@@ -473,7 +471,7 @@ jobs:
       VERSION: ${{ needs.generate-changelog.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
@@ -566,19 +564,18 @@ jobs:
             [[ -d "$pkg_dir" ]] || continue
             platform=$(basename "$pkg_dir" | sed "s/${PROJECT_NAME}-//")
             cat > "${pkg_dir}README.md" <<EOF
-          # @claylo/${PROJECT_NAME}-${platform}
+# @claylo/${PROJECT_NAME}-${platform}
 
-          This is the **${platform}** binary for [\`@claylo/${PROJECT_NAME}\`](https://www.npmjs.com/package/@claylo/${PROJECT_NAME}).
+This is the **${platform}** binary for [\`@claylo/${PROJECT_NAME}\`](https://www.npmjs.com/package/@claylo/${PROJECT_NAME}).
 
-          Install the main package instead:
+Install the main package instead:
 
-          \`\`\`sh
-          npm install @claylo/${PROJECT_NAME}
-          \`\`\`
+\`\`\`sh
+npm install @claylo/${PROJECT_NAME}
+\`\`\`
 
-          The correct platform binary will be selected automatically.
-          EOF
-            sed -i 's/^          //' "${pkg_dir}README.md"
+The correct platform binary will be selected automatically.
+EOF
           done
 
       - name: Publish platform packages
@@ -610,3 +607,4 @@ jobs:
         run: |
           cd "npm/${PROJECT_NAME}"
           npm publish --provenance --access public
+
