@@ -86,6 +86,22 @@ pub fn run_full_analysis(
         return Err(AnalysisError::EmptyInput);
     }
 
+    // Validate check names before building the enabled set.
+    if let Some(list) = checks {
+        let valid: HashSet<&str> = ALL_CHECKS.iter().copied().collect();
+        let unknown: Vec<&str> = list
+            .iter()
+            .map(String::as_str)
+            .filter(|name| !valid.contains(name))
+            .collect();
+        if !unknown.is_empty() {
+            return Err(AnalysisError::UnknownCheck {
+                names: unknown.join(", "),
+                available: ALL_CHECKS.join(", "),
+            });
+        }
+    }
+
     let enabled: HashSet<&str> = checks.map_or_else(
         || ALL_CHECKS.iter().copied().collect(),
         |list| list.iter().map(String::as_str).collect(),
@@ -298,6 +314,47 @@ mod tests {
         let md = "# Title\n\nThe cat sat on the mat.\n\n```rust\nlet x = 1;\n```";
         let report = run_full_analysis(md, true, None, None, None, None).unwrap();
         assert!(report.readability.is_some());
+    }
+
+    #[test]
+    fn unknown_check_returns_error() {
+        let text = "The cat sat on the mat.";
+        let checks = vec!["readablity".to_string()];
+        let result = run_full_analysis(text, false, Some(&checks), None, None, None);
+        let err = result.unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("readablity"), "should name the unknown check");
+        assert!(msg.contains("readability"), "should list valid checks");
+    }
+
+    #[test]
+    fn mixed_known_unknown_checks_returns_error() {
+        let text = "The cat sat on the mat.";
+        let checks = vec![
+            "readability".to_string(),
+            "bogus".to_string(),
+            "pacing".to_string(),
+            "nope".to_string(),
+        ];
+        let result = run_full_analysis(text, false, Some(&checks), None, None, None);
+        let err = result.unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("bogus"), "should name bogus");
+        assert!(msg.contains("nope"), "should name nope");
+        // The unknown names portion (before ". Available:") should only list invalid ones
+        let unknown_part = msg.split(". Available:").next().unwrap();
+        assert!(
+            !unknown_part.contains("readability"),
+            "should not list valid names as unknown"
+        );
+    }
+
+    #[test]
+    fn valid_checks_accepted() {
+        let text = "The cat sat on the mat. The dog ran fast.";
+        let checks: Vec<String> = ALL_CHECKS.iter().map(|s| (*s).to_string()).collect();
+        let result = run_full_analysis(text, false, Some(&checks), None, None, None);
+        assert!(result.is_ok(), "all valid check names should be accepted");
     }
 
     #[test]

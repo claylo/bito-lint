@@ -106,8 +106,15 @@ pub struct Config {
     /// Maximum input size in bytes (default: 5 MiB).
     ///
     /// Prevents resource exhaustion from oversized inputs in both CLI and MCP server.
-    /// Set to `null` / omit to disable the limit.
+    /// Omit to use the default (5 MiB). Use `disable_input_limit` to remove the
+    /// limit entirely.
     pub max_input_bytes: Option<usize>,
+    /// Disable the input size limit entirely.
+    ///
+    /// When `true`, `max_input_bytes` is ignored and no size check is performed.
+    /// Default: `false`.
+    #[serde(default)]
+    pub disable_input_limit: bool,
     /// Tokenizer backend (claude or openai). Defaults to claude.
     pub tokenizer: Option<Backend>,
     /// Custom completeness templates (name → required section headings).
@@ -339,10 +346,11 @@ impl ConfigLoader {
 /// Find the project config file path without loading it.
 ///
 /// Useful for commands that need to know where config is located.
+/// Uses the default boundary marker (`.git`) to match the behaviour of
+/// [`ConfigLoader::load`].
 pub fn find_project_config<P: AsRef<Utf8Path>>(start: P) -> Option<Utf8PathBuf> {
     ConfigLoader::new()
         .with_project_search(start.as_ref())
-        .without_boundary_marker()
         .find_project_config(start.as_ref())
 }
 
@@ -590,6 +598,35 @@ log_dir = "/tmp/bito-lint"
         if let Some(path) = dir {
             assert!(path.as_str().contains("bito-lint"));
         }
+    }
+
+    #[test]
+    fn disable_input_limit_overrides_max_bytes() {
+        let tmp = TempDir::new().unwrap();
+        let config_path = tmp.path().join("config.toml");
+        fs::write(
+            &config_path,
+            "max_input_bytes = 1024\ndisable_input_limit = true\n",
+        )
+        .unwrap();
+
+        let config_path = Utf8PathBuf::try_from(config_path).unwrap();
+
+        let config = ConfigLoader::new()
+            .with_user_config(false)
+            .with_file(&config_path)
+            .load()
+            .unwrap();
+
+        // disable_input_limit should be true, signalling callers to ignore max_input_bytes
+        assert!(config.disable_input_limit);
+        assert_eq!(config.max_input_bytes, Some(1024));
+    }
+
+    #[test]
+    fn disable_input_limit_defaults_to_false() {
+        let config = Config::default();
+        assert!(!config.disable_input_limit);
     }
 
     #[test]
