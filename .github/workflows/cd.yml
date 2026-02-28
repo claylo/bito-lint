@@ -218,7 +218,7 @@ jobs:
           prerelease: true
 
       - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@e4d4f7c39adfa4c260fb5c147f0622000aa14b99 # v4.0.0
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-path: ${{ env.PROJECT_NAME }}-${{ needs.generate-changelog.outputs.version }}-${{ matrix.build.target }}*
 
@@ -273,12 +273,9 @@ jobs:
           RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}"
 
           sed \
-            -e "s|__DESCRIPTION__|Quality gate tooling for building-in-the-open artifacts|" \
             -e "s|__HOMEPAGE__|https://github.com/${{ github.repository }}|" \
             -e "s|__VERSION__|${VERSION}|" \
-            -e "s|__LICENSE__|MIT|" \
             -e "s|__RELEASE_URL__|${RELEASE_URL}|g" \
-            -e "s|__PROJECT__|${PROJECT_NAME}|g" \
             -e "s|__SHA_DARWIN_ARM64__|$(get_sha aarch64-apple-darwin)|" \
             -e "s|__SHA_DARWIN_X64__|$(get_sha x86_64-apple-darwin)|" \
             -e "s|__SHA_LINUX_ARM64__|$(get_sha aarch64-unknown-linux-gnu)|" \
