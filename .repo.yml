@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier
-_commit: v1.0.0-beta.5
+_commit: v1.0.0-beta.6
 _src_path: gh:claylo/claylo-rs
 categories:
 - command-line-utilities
@@ -26,7 +26,6 @@ has_indicatif: true
 has_inquire: false
 has_issue_templates: true
 has_jsonl_logging: true
-has_just: true
 has_mcp_server: true
 has_md: true
 has_md_strict: false

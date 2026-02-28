@@ -58,6 +58,10 @@ bootstrap:
     fi
 
     echo ""
+    # Format (Jinja templating can produce non-canonical import ordering)
+    echo "🔨 Formatting source..."
+    cargo fmt --all
+    echo ""
     # Build
     echo "🔨 Building project..."
     cargo build --workspace
@@ -168,6 +172,10 @@ mdfix *files='':
 
 
 
+
+# Add a new crate to the workspace
+add-crate *ARGS:
+    scripts/add-crate {{ARGS}}
 
 # Pre-release validation
 release-check:
