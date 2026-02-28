@@ -1,6 +1,6 @@
 //! Doctor command — diagnose configuration and environment.
 
-use bito_lint_core::config::{self, Config};
+use bito_lint_core::config::{self, Config, ConfigSources};
 use bito_lint_core::dictionaries::{abbreviations, irregular_verbs, syllable_dict};
 use bito_lint_core::tokens::{self, Backend};
 use bito_lint_core::word_lists;
@@ -9,6 +9,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
 use serde::Serialize;
 use tracing::{debug, instrument};
+
 /// Arguments for the `doctor` subcommand.
 #[derive(Args, Debug, Default)]
 pub struct DoctorArgs {
@@ -71,9 +72,7 @@ struct EnvVar {
 }
 
 impl DoctorReport {
-    fn gather(cwd: &camino::Utf8Path, loaded_config: &Config) -> Self {
-        let config_file = config::find_project_config(cwd);
-
+    fn gather(config: &Config, sources: &ConfigSources, cwd: &camino::Utf8Path) -> Self {
         // Health checks
         let tokenizer_ok = tokens::count_tokens("test", None, Backend::default()).is_ok();
 
@@ -88,9 +87,9 @@ impl DoctorReport {
                 data_local: config::user_data_local_dir().map(|p| p.to_string()),
             },
             config: ConfigStatus {
-                found: config_file.is_some(),
-                file: config_file.map(|p| p.to_string()),
-                dialect: loaded_config.dialect.map(|d| d.as_str().to_string()),
+                found: sources.primary_file().is_some(),
+                file: sources.primary_file().map(|p| p.to_string()),
+                dialect: config.dialect.map(|d| d.as_str().to_string()),
             },
             environment: EnvironmentInfo {
                 cwd: Some(cwd.to_string()),
@@ -163,14 +162,16 @@ fn count_word_lists() -> usize {
 ///
 /// # Arguments
 /// * `global_json` - Global `--json` flag from CLI
+/// * `config` - The already-loaded configuration
+/// * `sources` - Config source metadata from loading
 /// * `cwd` - Current working directory
-/// * `loaded_config` - The already-loaded configuration
 #[instrument(name = "cmd_doctor", skip_all, fields(json_output))]
 pub fn cmd_doctor(
     _args: DoctorArgs,
     global_json: bool,
+    config: &Config,
+    sources: &ConfigSources,
     cwd: &camino::Utf8Path,
-    loaded_config: &Config,
 ) -> anyhow::Result<()> {
     debug!(json_output = global_json, "executing doctor command");
 
@@ -183,8 +184,9 @@ pub fn cmd_doctor(
     spinner.set_message("Gathering diagnostics...");
     spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
-    let report = DoctorReport::gather(cwd, loaded_config);
+    let report = DoctorReport::gather(config, sources, cwd);
     spinner.finish_and_clear();
+
     if global_json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
@@ -301,22 +303,30 @@ mod tests {
         camino::Utf8PathBuf::from("/tmp")
     }
 
+    fn test_sources() -> ConfigSources {
+        ConfigSources::default()
+    }
+
     #[test]
     fn test_cmd_doctor_text_succeeds() {
         let config = Config::default();
-        assert!(cmd_doctor(DoctorArgs::default(), false, &test_cwd(), &config).is_ok());
+        assert!(
+            cmd_doctor(DoctorArgs::default(), false, &config, &test_sources(), &test_cwd()).is_ok()
+        );
     }
 
     #[test]
     fn test_cmd_doctor_json_succeeds() {
         let config = Config::default();
-        assert!(cmd_doctor(DoctorArgs::default(), true, &test_cwd(), &config).is_ok());
+        assert!(
+            cmd_doctor(DoctorArgs::default(), true, &config, &test_sources(), &test_cwd()).is_ok()
+        );
     }
 
     #[test]
     fn test_doctor_report_gathers() {
         let config = Config::default();
-        let report = DoctorReport::gather(&test_cwd(), &config);
+        let report = DoctorReport::gather(&config, &test_sources(), &test_cwd());
         // On most systems, at least config dir should resolve
         assert!(report.directories.config.is_some() || report.directories.cache.is_some());
     }

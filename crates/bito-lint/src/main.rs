@@ -45,7 +45,7 @@ fn main() -> anyhow::Result<()> {
         })?;
         loader = loader.with_file(&config_path);
     }
-    let config = loader.load().context("failed to load configuration")?;
+    let (config, config_sources) = loader.load().context("failed to load configuration")?;
 
     let obs_config = observability::ObservabilityConfig::from_env_with_overrides(
         config
@@ -104,8 +104,12 @@ fn main() -> anyhow::Result<()> {
         Commands::Grammar(args) => {
             commands::grammar::cmd_grammar(args, cli.json, config.passive_max_percent, max_input)
         }
-        Commands::Doctor(args) => commands::doctor::cmd_doctor(args, cli.json, &cwd, &config),
-        Commands::Info(args) => commands::info::cmd_info(args, cli.json, &config, &cwd),
+        Commands::Doctor(args) => {
+            commands::doctor::cmd_doctor(args, cli.json, &config, &config_sources, &cwd)
+        }
+        Commands::Info(args) => {
+            commands::info::cmd_info(args, cli.json, &config, &config_sources)
+        }
         #[cfg(feature = "mcp")]
         Commands::Serve(args) => {
             let rt = tokio::runtime::Runtime::new()

@@ -175,6 +175,13 @@ Drop a config file in your project and it takes effect automatically:
 
 Closer files win. All formats (TOML, YAML, JSON) work interchangeably.
 
+Environment variables override config files:
+
+- `BITO_LINT_LOG_PATH` — log file path (daily rotation appends `.YYYY-MM-DD`)
+- `BITO_LINT_LOG_DIR` — directory (file name defaults to `bito-lint.jsonl`)
+- `BITO_LINT_ENV` — environment tag (default: `dev`)
+- Config file key: `log_dir`
+
 ```toml
 # .bito-lint.toml
 dialect = "en-us"

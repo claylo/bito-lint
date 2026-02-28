@@ -14,7 +14,6 @@
 //!
 //! The [`command()`] function returns the clap `Command` for generating man pages
 //! and shell completions via `xtask`.
-
 pub mod commands;
 
 #[cfg(feature = "mcp")]
@@ -50,8 +49,8 @@ impl ColorChoice {
 
 const ENV_HELP: &str = "\
 ENVIRONMENT VARIABLES:
-    RUST_LOG               Log filter (e.g., debug, bito-lint=trace)
-    BITO_LINT_LOG_PATH     Explicit log file path
+    RUST_LOG                Log filter (e.g., debug, bito-lint=trace)
+    BITO_LINT_LOG_PATH     Log file path (rotated daily)
     BITO_LINT_LOG_DIR      Log directory
     BITO_LINT_TOKENIZER    Tokenizer backend (claude, openai)
 ";
@@ -115,10 +114,8 @@ pub enum Commands {
 
     /// Diagnose configuration and environment
     Doctor(commands::doctor::DoctorArgs),
-
     /// Show package information
     Info(commands::info::InfoArgs),
-
     /// Start MCP (Model Context Protocol) server on stdio
     #[cfg(feature = "mcp")]
     Serve(commands::serve::ServeArgs),

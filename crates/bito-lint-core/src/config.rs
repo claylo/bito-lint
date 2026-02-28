@@ -151,6 +151,36 @@ impl LogLevel {
     }
 }
 
+/// Metadata about which configuration sources were loaded.
+///
+/// Returned alongside [`Config`] from [`ConfigLoader::load()`] so commands
+/// can report the actual config files without re-discovering them.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ConfigSources {
+    /// Project config file found by walking up from the search root.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_file: Option<Utf8PathBuf>,
+    /// User config file from XDG config directory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_file: Option<Utf8PathBuf>,
+    /// Explicit config files loaded (e.g., from `--config` flag).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub explicit_files: Vec<Utf8PathBuf>,
+}
+
+impl ConfigSources {
+    /// Returns the highest-precedence config file that was loaded.
+    ///
+    /// Precedence: explicit files > project file > user file.
+    pub fn primary_file(&self) -> Option<&Utf8Path> {
+        self.explicit_files
+            .last()
+            .map(Utf8PathBuf::as_path)
+            .or(self.project_file.as_deref())
+            .or(self.user_file.as_deref())
+    }
+}
+
 /// Supported configuration file extensions (in order of preference).
 const CONFIG_EXTENSIONS: &[&str] = &["toml", "yaml", "yml", "json"];
 
@@ -221,21 +251,27 @@ impl ConfigLoader {
 
     /// Load configuration, merging all discovered sources.
     ///
+    /// Returns the merged config alongside metadata about which files
+    /// were loaded — pass the [`ConfigSources`] to commands instead of
+    /// having them re-discover config files.
+    ///
     /// Precedence (highest to lowest):
     /// 1. Explicit files (in order added via `with_file`)
     /// 2. Project config (closest to search root)
     /// 3. User config (`~/.config/bito-lint/config.<ext>`)
     /// 4. Default values
     #[tracing::instrument(skip(self), fields(search_root = ?self.project_search_root))]
-    pub fn load(self) -> ConfigResult<Config> {
+    pub fn load(self) -> ConfigResult<(Config, ConfigSources)> {
         tracing::debug!("loading configuration");
         let mut figment = Figment::new().merge(Serialized::defaults(Config::default()));
+        let mut sources = ConfigSources::default();
 
         // Start with user config (lowest precedence of file sources)
         if self.include_user_config
             && let Some(user_config) = self.find_user_config()
         {
             figment = Self::merge_file(figment, &user_config);
+            sources.user_file = Some(user_config);
         }
 
         // Add project config
@@ -243,12 +279,14 @@ impl ConfigLoader {
             && let Some(project_config) = self.find_project_config(root)
         {
             figment = Self::merge_file(figment, &project_config);
+            sources.project_file = Some(project_config);
         }
 
         // Add explicit files
         for file in &self.explicit_files {
             figment = Self::merge_file(figment, file);
         }
+        sources.explicit_files = self.explicit_files;
 
         // Environment variables (highest precedence)
         // BITO_LINT_DIALECT=en-gb, BITO_LINT_LOG_LEVEL=debug, etc.
@@ -261,11 +299,11 @@ impl ConfigLoader {
             log_level = config.log_level.as_str(),
             "configuration loaded"
         );
-        Ok(config)
+        Ok((config, sources))
     }
 
     /// Load configuration, returning an error if no config file is found.
-    pub fn load_or_error(self) -> ConfigResult<Config> {
+    pub fn load_or_error(self) -> ConfigResult<(Config, ConfigSources)> {
         let has_user = self.include_user_config && self.find_user_config().is_some();
         let has_project = self
             .project_search_root
@@ -286,15 +324,6 @@ impl ConfigLoader {
         let mut current = Some(start.to_path_buf());
 
         while let Some(dir) = current {
-            // Check for boundary marker
-            if let Some(ref marker) = self.boundary_marker {
-                let marker_path = dir.join(marker);
-                if marker_path.exists() && dir != start {
-                    // Found boundary in a parent dir, stop searching
-                    break;
-                }
-            }
-
             // Check for config files in this directory (try each extension)
             for ext in CONFIG_EXTENSIONS {
                 // Try dotfile first (.bito-lint.toml)
@@ -308,6 +337,15 @@ impl ConfigLoader {
                 if regular.is_file() {
                     return Some(regular);
                 }
+            }
+
+            // Check for boundary marker AFTER checking config files,
+            // so a config in the same directory as the marker is found.
+            if let Some(ref marker) = self.boundary_marker
+                && dir.join(marker).exists()
+                && dir != start
+            {
+                break;
             }
 
             current = dir.parent().map(Utf8Path::to_path_buf);
@@ -341,17 +379,6 @@ impl ConfigLoader {
             _ => figment.merge(Toml::file_exact(path.as_str())),
         }
     }
-}
-
-/// Find the project config file path without loading it.
-///
-/// Useful for commands that need to know where config is located.
-/// Uses the default boundary marker (`.git`) to match the behaviour of
-/// [`ConfigLoader::load`].
-pub fn find_project_config<P: AsRef<Utf8Path>>(start: P) -> Option<Utf8PathBuf> {
-    ConfigLoader::new()
-        .with_project_search(start.as_ref())
-        .find_project_config(start.as_ref())
 }
 
 /// Get the project directories for XDG-compliant path resolution.
@@ -422,8 +449,9 @@ mod tests {
             .without_boundary_marker();
 
         // Should succeed with defaults even if no files found
-        let config = loader.load().unwrap();
+        let (config, sources) = loader.load().unwrap();
         assert_eq!(config.log_level, LogLevel::Info);
+        assert!(sources.primary_file().is_none());
     }
 
     #[test]
@@ -441,7 +469,7 @@ log_dir = "/tmp/bito-lint"
         // Convert to Utf8PathBuf for API call
         let config_path = Utf8PathBuf::try_from(config_path).unwrap();
 
-        let config = ConfigLoader::new()
+        let (config, _sources) = ConfigLoader::new()
             .with_user_config(false)
             .with_file(&config_path)
             .load()
@@ -468,7 +496,7 @@ log_dir = "/tmp/bito-lint"
         let base_config = Utf8PathBuf::try_from(base_config).unwrap();
         let override_config = Utf8PathBuf::try_from(override_config).unwrap();
 
-        let config = ConfigLoader::new()
+        let (config, _sources) = ConfigLoader::new()
             .with_user_config(false)
             .with_file(&base_config)
             .with_file(&override_config)
@@ -494,7 +522,7 @@ log_dir = "/tmp/bito-lint"
         let sub_dir = Utf8PathBuf::try_from(sub_dir).unwrap();
 
         // Search from deep subdirectory
-        let config = ConfigLoader::new()
+        let (config, sources) = ConfigLoader::new()
             .with_user_config(false)
             .without_boundary_marker()
             .with_project_search(&sub_dir)
@@ -502,6 +530,7 @@ log_dir = "/tmp/bito-lint"
             .unwrap();
 
         assert_eq!(config.log_level, LogLevel::Debug);
+        assert!(sources.project_file.is_some());
     }
 
     #[test]
@@ -524,7 +553,7 @@ log_dir = "/tmp/bito-lint"
         let work = Utf8PathBuf::try_from(work).unwrap();
 
         // Search from work directory - should not find parent config
-        let config = ConfigLoader::new()
+        let (config, sources) = ConfigLoader::new()
             .with_user_config(false)
             .with_boundary_marker(".git")
             .with_project_search(&work)
@@ -533,6 +562,7 @@ log_dir = "/tmp/bito-lint"
 
         // Should get default since config is beyond boundary
         assert_eq!(config.log_level, LogLevel::Info);
+        assert!(sources.project_file.is_none());
     }
 
     #[test]
@@ -551,7 +581,7 @@ log_dir = "/tmp/bito-lint"
         let tmp_path = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
         let override_config = Utf8PathBuf::try_from(override_config).unwrap();
 
-        let config = ConfigLoader::new()
+        let (config, sources) = ConfigLoader::new()
             .with_user_config(false)
             .without_boundary_marker()
             .with_project_search(&tmp_path)
@@ -561,6 +591,8 @@ log_dir = "/tmp/bito-lint"
 
         // Explicit file wins over project config
         assert_eq!(config.log_level, LogLevel::Error);
+        assert!(sources.project_file.is_some());
+        assert_eq!(sources.explicit_files.len(), 1);
     }
 
     #[test]
@@ -582,7 +614,7 @@ log_dir = "/tmp/bito-lint"
         // Convert to Utf8PathBuf for API call
         let config_path = Utf8PathBuf::try_from(config_path).unwrap();
 
-        let config = ConfigLoader::new()
+        let (config, _sources) = ConfigLoader::new()
             .with_user_config(false)
             .with_file(&config_path)
             .load_or_error()
@@ -612,7 +644,7 @@ log_dir = "/tmp/bito-lint"
 
         let config_path = Utf8PathBuf::try_from(config_path).unwrap();
 
-        let config = ConfigLoader::new()
+        let (config, _sources) = ConfigLoader::new()
             .with_user_config(false)
             .with_file(&config_path)
             .load()
@@ -637,7 +669,7 @@ log_dir = "/tmp/bito-lint"
 
         let config_path = Utf8PathBuf::try_from(config_path).unwrap();
 
-        let config = ConfigLoader::new()
+        let (config, _sources) = ConfigLoader::new()
             .with_user_config(false)
             .with_file(&config_path)
             .load()
@@ -660,7 +692,7 @@ log_dir = "/tmp/bito-lint"
 
             let config_path = Utf8PathBuf::try_from(config_path).unwrap();
 
-            let config = ConfigLoader::new()
+            let (config, _sources) = ConfigLoader::new()
                 .with_user_config(false)
                 .with_file(&config_path)
                 .load()
@@ -694,7 +726,7 @@ log_dir = "/tmp/bito-lint"
             std::env::set_var("BITO_LINT_DIALECT", "en-ca");
         }
 
-        let config = ConfigLoader::new()
+        let (config, _sources) = ConfigLoader::new()
             .with_user_config(false)
             .without_boundary_marker()
             .load()
@@ -724,7 +756,7 @@ log_dir = "/tmp/bito-lint"
             std::env::set_var("BITO_LINT_DIALECT", "en-au");
         }
 
-        let config = ConfigLoader::new()
+        let (config, _sources) = ConfigLoader::new()
             .with_user_config(false)
             .with_file(&config_path)
             .load()
