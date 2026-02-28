@@ -257,6 +257,12 @@ jobs:
             --dir checksums \
             --repo "${{ github.repository }}"
 
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: .github/formula.rb.tmpl
+          sparse-checkout-cone-mode: false
+
       - name: Generate formula
         run: |
           get_sha() {
@@ -264,54 +270,20 @@ jobs:
             awk '{print $1}' "checksums/${PROJECT_NAME}-${VERSION}-${target}.tar.gz.sha256"
           }
 
-          SHA_DARWIN_ARM64=$(get_sha "aarch64-apple-darwin")
-          SHA_DARWIN_X64=$(get_sha "x86_64-apple-darwin")
-          SHA_LINUX_ARM64=$(get_sha "aarch64-unknown-linux-gnu")
-          SHA_LINUX_X64=$(get_sha "x86_64-unknown-linux-gnu")
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}"
 
-          cat > formula.rb <<RUBY
-# typed: true
-# frozen_string_literal: true
-
-class BitoLint < Formula
-  desc "Quality gate tooling for building-in-the-open artifacts"
-  homepage "https://github.com/${{ github.repository }}"
-  version "${VERSION}"
-  license "MIT"
-
-  on_macos do
-    if Hardware::CPU.arm?
-      url "https://github.com/${{ github.repository }}/releases/download/v#{version}/${PROJECT_NAME}-#{version}-aarch64-apple-darwin.tar.gz"
-      sha256 "${SHA_DARWIN_ARM64}"
-    else
-      url "https://github.com/${{ github.repository }}/releases/download/v#{version}/${PROJECT_NAME}-#{version}-x86_64-apple-darwin.tar.gz"
-      sha256 "${SHA_DARWIN_X64}"
-    end
-  end
-
-  on_linux do
-    if Hardware::CPU.arm?
-      url "https://github.com/${{ github.repository }}/releases/download/v#{version}/${PROJECT_NAME}-#{version}-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "${SHA_LINUX_ARM64}"
-    else
-      url "https://github.com/${{ github.repository }}/releases/download/v#{version}/${PROJECT_NAME}-#{version}-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "${SHA_LINUX_X64}"
-    end
-  end
-
-  def install
-    bin.install "bin/${PROJECT_NAME}"
-    man1.install Dir["share/man/man1/*.1"]
-    bash_completion.install "share/completions/${PROJECT_NAME}.bash" => "${PROJECT_NAME}"
-    zsh_completion.install "share/completions/_${PROJECT_NAME}"
-    fish_completion.install "share/completions/${PROJECT_NAME}.fish"
-  end
-
-  test do
-    assert_match version.to_s, shell_output("\#{bin}/${PROJECT_NAME} --version-only")
-  end
-end
-RUBY
+          sed \
+            -e "s|__DESCRIPTION__|Quality gate tooling for building-in-the-open artifacts|" \
+            -e "s|__HOMEPAGE__|https://github.com/${{ github.repository }}|" \
+            -e "s|__VERSION__|${VERSION}|" \
+            -e "s|__LICENSE__|MIT|" \
+            -e "s|__RELEASE_URL__|${RELEASE_URL}|g" \
+            -e "s|__PROJECT__|${PROJECT_NAME}|g" \
+            -e "s|__SHA_DARWIN_ARM64__|$(get_sha aarch64-apple-darwin)|" \
+            -e "s|__SHA_DARWIN_X64__|$(get_sha x86_64-apple-darwin)|" \
+            -e "s|__SHA_LINUX_ARM64__|$(get_sha aarch64-unknown-linux-gnu)|" \
+            -e "s|__SHA_LINUX_X64__|$(get_sha x86_64-unknown-linux-gnu)|" \
+            .github/formula.rb.tmpl > formula.rb
 
           echo "Generated formula:"
           cat formula.rb
@@ -563,19 +535,19 @@ RUBY
           for pkg_dir in npm/platforms/*/; do
             [[ -d "$pkg_dir" ]] || continue
             platform=$(basename "$pkg_dir" | sed "s/${PROJECT_NAME}-//")
-            cat > "${pkg_dir}README.md" <<EOF
-# @claylo/${PROJECT_NAME}-${platform}
-
-This is the **${platform}** binary for [\`@claylo/${PROJECT_NAME}\`](https://www.npmjs.com/package/@claylo/${PROJECT_NAME}).
-
-Install the main package instead:
-
-\`\`\`sh
-npm install @claylo/${PROJECT_NAME}
-\`\`\`
-
-The correct platform binary will be selected automatically.
-EOF
+            printf '%s\n' \
+              "# @claylo/${PROJECT_NAME}-${platform}" \
+              "" \
+              "This is the **${platform}** binary for [\`@claylo/${PROJECT_NAME}\`](https://www.npmjs.com/package/@claylo/${PROJECT_NAME})." \
+              "" \
+              "Install the main package instead:" \
+              "" \
+              '```sh' \
+              "npm install @claylo/${PROJECT_NAME}" \
+              '```' \
+              "" \
+              "The correct platform binary will be selected automatically." \
+              > "${pkg_dir}README.md"
           done
 
       - name: Publish platform packages
