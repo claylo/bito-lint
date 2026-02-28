@@ -311,7 +311,14 @@ mod tests {
     fn test_cmd_doctor_text_succeeds() {
         let config = Config::default();
         assert!(
-            cmd_doctor(DoctorArgs::default(), false, &config, &test_sources(), &test_cwd()).is_ok()
+            cmd_doctor(
+                DoctorArgs::default(),
+                false,
+                &config,
+                &test_sources(),
+                &test_cwd()
+            )
+            .is_ok()
         );
     }
 
@@ -319,7 +326,14 @@ mod tests {
     fn test_cmd_doctor_json_succeeds() {
         let config = Config::default();
         assert!(
-            cmd_doctor(DoctorArgs::default(), true, &config, &test_sources(), &test_cwd()).is_ok()
+            cmd_doctor(
+                DoctorArgs::default(),
+                true,
+                &config,
+                &test_sources(),
+                &test_cwd()
+            )
+            .is_ok()
         );
     }
 

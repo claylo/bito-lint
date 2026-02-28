@@ -225,7 +225,7 @@ jobs:
   publish-crates-io:
     name: Publish to crates.io
     if: ${{ !contains(github.ref, '-') && vars.CRATES_IO_ENABLED == 'true' }}
-    needs: generate-changelog
+    needs: [generate-changelog, publish-binaries]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -314,7 +314,7 @@ jobs:
   publish-deb:
     name: Publish Debian package
     if: vars.DEB_ENABLED == 'true'
-    needs: generate-changelog
+    needs: [generate-changelog, publish-binaries]
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -374,7 +374,7 @@ jobs:
   publish-rpm:
     name: Publish RPM package
     if: vars.RPM_ENABLED == 'true'
-    needs: generate-changelog
+    needs: [generate-changelog, publish-binaries]
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
