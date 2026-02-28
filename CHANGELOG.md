@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.7] - 2026-02-28
+
+### Miscellaneous Tasks
+
+- Formatting and workflow fixes (#16) by @claylo in [#16](https://github.com/claylo/bito-lint/pull/16)
+- Update claylo-rs and rmcp deps (#17) by @claylo in [#17](https://github.com/claylo/bito-lint/pull/17)
+
+
+
+
+**Full Changelog**: [v0.1.6...v0.1.7](https://github.com/claylo/bito-lint/compare/v0.1.6...v0.1.7)
+
+
 ## [0.1.6] - 2026-02-28
 
 ### Features
@@ -17,6 +30,7 @@ All notable changes to this project will be documented in this file.
 
 - *(template)* Update claylo-rs (#11) by @claylo in [#11](https://github.com/claylo/bito-lint/pull/11)
 - *(template)* Update claylo-rs to v1.0.0-beta.6 (#14) by @claylo in [#14](https://github.com/claylo/bito-lint/pull/14)
+- Fix cd release workflow (#15) by @claylo in [#15](https://github.com/claylo/bito-lint/pull/15)
 
 
 
