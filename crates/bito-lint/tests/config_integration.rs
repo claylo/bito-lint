@@ -39,8 +39,14 @@ fn runs_without_config_file() {
     let tmp = TempDir::new().unwrap();
     let json = info_json(tmp.path());
 
-    assert_eq!(json["config"]["log_level"], "info", "should use default log level");
-    assert!(json["config"]["config_file"].is_null(), "no config file should be reported");
+    assert_eq!(
+        json["config"]["log_level"], "info",
+        "should use default log level"
+    );
+    assert!(
+        json["config"]["config_file"].is_null(),
+        "no config file should be reported"
+    );
 }
 
 #[test]
@@ -53,7 +59,10 @@ fn discovers_dotfile_config_in_current_dir() {
 
     assert_eq!(json["config"]["log_level"], "debug");
     let reported = json["config"]["config_file"].as_str().unwrap();
-    assert!(reported.ends_with(".bito-lint.toml"), "should report dotfile: {reported}");
+    assert!(
+        reported.ends_with(".bito-lint.toml"),
+        "should report dotfile: {reported}"
+    );
 }
 
 #[test]
@@ -84,7 +93,10 @@ fn discovers_config_in_parent_directory() {
     let json = info_json(&sub_dir);
 
     assert_eq!(json["config"]["log_level"], "debug");
-    assert!(json["config"]["config_file"].as_str().is_some(), "should find parent config");
+    assert!(
+        json["config"]["config_file"].as_str().is_some(),
+        "should find parent config"
+    );
 }
 
 #[test]
@@ -97,7 +109,10 @@ fn dotfile_takes_precedence_over_regular_name() {
 
     let json = info_json(tmp.path());
 
-    assert_eq!(json["config"]["log_level"], "debug", "dotfile value should win");
+    assert_eq!(
+        json["config"]["log_level"], "debug",
+        "dotfile value should win"
+    );
 }
 
 // =============================================================================
@@ -134,7 +149,11 @@ fn parses_yml_config() {
 #[test]
 fn parses_json_config() {
     let tmp = TempDir::new().unwrap();
-    fs::write(tmp.path().join(".bito-lint.json"), r#"{"log_level": "error"}"#).unwrap();
+    fs::write(
+        tmp.path().join(".bito-lint.json"),
+        r#"{"log_level": "error"}"#,
+    )
+    .unwrap();
 
     let json = info_json(tmp.path());
     assert_eq!(json["config"]["log_level"], "error");
@@ -156,7 +175,10 @@ fn closer_config_takes_precedence() {
 
     let json = info_json(&sub_dir);
 
-    assert_eq!(json["config"]["log_level"], "debug", "closer config should win");
+    assert_eq!(
+        json["config"]["log_level"], "debug",
+        "closer config should win"
+    );
 }
 
 #[test]
@@ -168,7 +190,10 @@ fn toml_preferred_over_yaml_in_same_directory() {
     fs::write(tmp.path().join(".bito-lint.yaml"), "log_level: error\n").unwrap();
 
     let json = info_json(tmp.path());
-    assert_eq!(json["config"]["log_level"], "debug", "TOML should be preferred over YAML");
+    assert_eq!(
+        json["config"]["log_level"], "debug",
+        "TOML should be preferred over YAML"
+    );
 }
 
 #[test]
@@ -196,7 +221,10 @@ fn explicit_config_overrides_discovered() {
     assert!(output.status.success());
 
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["config"]["log_level"], "error", "--config should override discovered config");
+    assert_eq!(
+        json["config"]["log_level"], "error",
+        "--config should override discovered config"
+    );
     let reported = json["config"]["config_file"].as_str().unwrap();
     assert!(
         reported.ends_with("override.toml"),
@@ -211,7 +239,11 @@ fn explicit_config_overrides_discovered() {
 #[test]
 fn invalid_toml_config_shows_error() {
     let tmp = TempDir::new().unwrap();
-    fs::write(tmp.path().join(".bito-lint.toml"), "this is not valid toml [[[").unwrap();
+    fs::write(
+        tmp.path().join(".bito-lint.toml"),
+        "this is not valid toml [[[",
+    )
+    .unwrap();
 
     cmd()
         .args(["-C", tmp.path().to_str().unwrap(), "info"])
@@ -283,8 +315,14 @@ fn git_boundary_stops_config_search() {
     // Running from src/ should NOT find parent config (stopped at .git)
     let json = info_json(&src);
 
-    assert_eq!(json["config"]["log_level"], "info", "should use default — boundary stops search");
-    assert!(json["config"]["config_file"].is_null(), "should not find config beyond boundary");
+    assert_eq!(
+        json["config"]["log_level"], "info",
+        "should use default — boundary stops search"
+    );
+    assert!(
+        json["config"]["config_file"].is_null(),
+        "should not find config beyond boundary"
+    );
 }
 
 #[test]
@@ -301,6 +339,12 @@ fn config_in_same_dir_as_git_is_found() {
     // Running from src/ should find the repo config
     let json = info_json(&src);
 
-    assert_eq!(json["config"]["log_level"], "debug", "config next to .git should be found");
-    assert!(json["config"]["config_file"].as_str().is_some(), "should report config file");
+    assert_eq!(
+        json["config"]["log_level"], "debug",
+        "config next to .git should be found"
+    );
+    assert!(
+        json["config"]["config_file"].as_str().is_some(),
+        "should report config file"
+    );
 }

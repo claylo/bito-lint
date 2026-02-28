@@ -1,7 +1,7 @@
 //! Info command implementation
 
-use clap::Args;
 use bito_lint_core::config::{Config, ConfigSources};
+use clap::Args;
 use owo_colors::OwoColorize;
 use serde::Serialize;
 use tracing::{debug, instrument};

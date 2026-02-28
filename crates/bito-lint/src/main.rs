@@ -107,9 +107,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Doctor(args) => {
             commands::doctor::cmd_doctor(args, cli.json, &config, &config_sources, &cwd)
         }
-        Commands::Info(args) => {
-            commands::info::cmd_info(args, cli.json, &config, &config_sources)
-        }
+        Commands::Info(args) => commands::info::cmd_info(args, cli.json, &config, &config_sources),
         #[cfg(feature = "mcp")]
         Commands::Serve(args) => {
             let rt = tokio::runtime::Runtime::new()
