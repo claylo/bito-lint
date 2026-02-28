@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.6] - 2026-02-28
+
+### Features
+
+- *(core)* Implement pluggable tokenizer backends (#10) by @claylo in [#10](https://github.com/claylo/bito-lint/pull/10)
+- *(tokens)* Table-aware Claude tokenizer + vocab update to 38,360 (#12) by @claylo in [#12](https://github.com/claylo/bito-lint/pull/12)
+
+### Bug Fixes
+
+- Address code review findings 1-5 (#13) by @claylo in [#13](https://github.com/claylo/bito-lint/pull/13)
+
+### Miscellaneous Tasks
+
+- *(template)* Update claylo-rs (#11) by @claylo in [#11](https://github.com/claylo/bito-lint/pull/11)
+- *(template)* Update claylo-rs to v1.0.0-beta.6 (#14) by @claylo in [#14](https://github.com/claylo/bito-lint/pull/14)
+
+
+
+
+**Full Changelog**: [v0.1.5...v0.1.6](https://github.com/claylo/bito-lint/compare/v0.1.5...v0.1.6)
+
+
 ## [0.1.3] - 2026-02-09
 
 ### Bug Fixes
