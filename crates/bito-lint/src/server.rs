@@ -116,6 +116,15 @@ fn parse_dialect(s: Option<&str>) -> Result<Option<Dialect>, McpError> {
     }
 }
 
+/// Parameters for the `lint_file` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct LintFileParams {
+    /// File path (relative to project root) for rule matching.
+    pub file_path: String,
+    /// The file contents to lint.
+    pub text: String,
+}
+
 /// MCP server exposing project functionality to AI assistants.
 ///
 /// Each `#[tool]` method in the `#[tool_router]` impl block is automatically
@@ -124,6 +133,7 @@ fn parse_dialect(s: Option<&str>) -> Result<Option<Dialect>, McpError> {
 pub struct ProjectServer {
     tool_router: rmcp::handler::server::router::tool::ToolRouter<Self>,
     max_input_bytes: Option<usize>,
+    config: bito_lint_core::Config,
 }
 
 impl Default for ProjectServer {
@@ -139,12 +149,19 @@ impl ProjectServer {
         Self {
             tool_router: Self::tool_router(),
             max_input_bytes: Some(core::DEFAULT_MAX_INPUT_BYTES),
+            config: bito_lint_core::Config::default(),
         }
     }
 
     /// Create a new MCP server with a custom input size limit.
     pub const fn with_max_input_bytes(mut self, max_bytes: Option<usize>) -> Self {
         self.max_input_bytes = max_bytes;
+        self
+    }
+
+    /// Create a new MCP server with project configuration.
+    pub fn with_config(mut self, config: bito_lint_core::Config) -> Self {
+        self.config = config;
         self
     }
 
@@ -334,6 +351,48 @@ impl ProjectServer {
             issue_count = report.issues.len(),
             "MCP tool completed"
         );
+        Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
+    /// Lint a file according to project rules.
+    #[tool(
+        description = "Lint a file against configured project rules. Matches file path to rules, runs applicable checks, returns results with pass/fail."
+    )]
+    #[tracing::instrument(skip(self, params), fields(otel.kind = "server", file = %params.file_path))]
+    fn lint_file(
+        &self,
+        #[allow(unused_variables)] Parameters(params): Parameters<LintFileParams>,
+    ) -> Result<CallToolResult, McpError> {
+        tracing::debug!(tool = "lint_file", file = %params.file_path, "executing MCP tool");
+        self.validate_input(&params.text)?;
+
+        let rules = self.config.rules.as_deref().unwrap_or_default();
+        let rule_set = bito_lint_core::rules::RuleSet::compile(rules);
+        let resolved = rule_set.resolve(&params.file_path);
+
+        if resolved.is_empty() {
+            return Ok(CallToolResult::success(vec![Content::text(
+                serde_json::json!({
+                    "file": params.file_path,
+                    "matched": false,
+                    "message": "no rules match this file path"
+                })
+                .to_string(),
+            )]));
+        }
+
+        let report = bito_lint_core::lint::run_lint(
+            &params.file_path,
+            &params.text,
+            &resolved,
+            &self.config,
+        )
+        .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        let json = serde_json::to_string_pretty(&report)
+            .map_err(|e| McpError::internal_error(format!("serialization error: {e}"), None))?;
+
+        tracing::info!(tool = "lint_file", pass = report.pass, "MCP tool completed");
         Ok(CallToolResult::success(vec![Content::text(json)]))
     }
 }
@@ -634,5 +693,53 @@ mod tests {
         let text = extract_text(&result).expect("should have text content");
         let json: serde_json::Value = serde_json::from_str(text).expect("valid JSON");
         assert!(!json["pass"].as_bool().unwrap());
+    }
+
+    #[test]
+    fn lint_file_no_rules_returns_no_match() {
+        let server = ProjectServer::new();
+        let params = Parameters(LintFileParams {
+            file_path: "docs/guide.md".to_string(),
+            text: "The cat sat on the mat.".to_string(),
+        });
+
+        let result = server.lint_file(params).expect("lint_file should succeed");
+        assert!(!result.is_error.unwrap_or(false));
+
+        let text = extract_text(&result).expect("should have text content");
+        let json: serde_json::Value = serde_json::from_str(text).expect("valid JSON");
+        assert_eq!(json["matched"], false);
+    }
+
+    #[test]
+    fn lint_file_with_rules_runs_checks() {
+        use bito_lint_core::config::{ReadabilityRuleConfig, Rule, RuleChecks};
+
+        let config = bito_lint_core::Config {
+            rules: Some(vec![Rule {
+                paths: vec!["docs/**/*.md".to_string()],
+                checks: RuleChecks {
+                    readability: Some(ReadabilityRuleConfig {
+                        max_grade: Some(20.0),
+                    }),
+                    ..Default::default()
+                },
+            }]),
+            ..Default::default()
+        };
+
+        let server = ProjectServer::new().with_config(config);
+        let params = Parameters(LintFileParams {
+            file_path: "docs/guide.md".to_string(),
+            text: "The cat sat on the mat. The dog ran fast.".to_string(),
+        });
+
+        let result = server.lint_file(params).expect("lint_file should succeed");
+        assert!(!result.is_error.unwrap_or(false));
+
+        let text = extract_text(&result).expect("should have text content");
+        let json: serde_json::Value = serde_json::from_str(text).expect("valid JSON");
+        assert!(json["pass"].as_bool().unwrap());
+        assert!(json["readability"].is_object());
     }
 }

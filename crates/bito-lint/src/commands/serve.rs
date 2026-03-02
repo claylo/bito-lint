@@ -16,10 +16,16 @@ pub struct ServeArgs {}
 /// stdin/stdout using JSON-RPC. All logging goes to stderr to keep the
 /// stdio transport clean.
 #[tracing::instrument(skip_all)]
-pub async fn cmd_serve(_args: ServeArgs, max_input_bytes: Option<usize>) -> Result<()> {
+pub async fn cmd_serve(
+    _args: ServeArgs,
+    max_input_bytes: Option<usize>,
+    config: bito_lint_core::Config,
+) -> Result<()> {
     tracing::info!("starting MCP server on stdio");
 
-    let server = ProjectServer::new().with_max_input_bytes(max_input_bytes);
+    let server = ProjectServer::new()
+        .with_max_input_bytes(max_input_bytes)
+        .with_config(config);
     let service = server.serve(rmcp::transport::stdio()).await?;
     tracing::info!("MCP server ready, waiting for client");
     service.waiting().await?;

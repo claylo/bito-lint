@@ -113,7 +113,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Serve(args) => {
             let rt = tokio::runtime::Runtime::new()
                 .context("failed to create async runtime for MCP server")?;
-            rt.block_on(commands::serve::cmd_serve(args, max_input))
+            rt.block_on(commands::serve::cmd_serve(args, max_input, config))
         }
     };
     if let Err(ref err) = result {
