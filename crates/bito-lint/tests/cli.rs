@@ -180,6 +180,104 @@ fn unknown_check_name_fails() {
 }
 
 // =============================================================================
+// Analyze: --exclude
+// =============================================================================
+
+#[test]
+fn exclude_skips_named_checks() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tmp.path(), "The cat sat on the mat. The dog ran fast.").unwrap();
+    // Exclude style — JSON output should omit the style field
+    cmd()
+        .args([
+            "analyze",
+            tmp.path().to_str().unwrap(),
+            "--exclude",
+            "style",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"style\"").not());
+}
+
+#[test]
+fn exclude_unknown_name_fails() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tmp.path(), "The cat sat on the mat.").unwrap();
+    cmd()
+        .args([
+            "analyze",
+            tmp.path().to_str().unwrap(),
+            "--exclude",
+            "bogus",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown check"));
+}
+
+#[test]
+fn checks_and_exclude_conflict() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tmp.path(), "The cat sat on the mat.").unwrap();
+    cmd()
+        .args([
+            "analyze",
+            tmp.path().to_str().unwrap(),
+            "--checks",
+            "readability",
+            "--exclude",
+            "style",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}
+
+// =============================================================================
+// Analyze: --max-grade and --passive-max
+// =============================================================================
+
+#[test]
+fn analyze_max_grade_accepted() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tmp.path(), "The cat sat on the mat. The dog ran fast.").unwrap();
+    cmd()
+        .args([
+            "analyze",
+            tmp.path().to_str().unwrap(),
+            "--checks",
+            "readability",
+            "--max-grade",
+            "12",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"readability\""));
+}
+
+#[test]
+fn analyze_passive_max_accepted() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tmp.path(), "The cat sat on the mat. The dog ran fast.").unwrap();
+    cmd()
+        .args([
+            "analyze",
+            tmp.path().to_str().unwrap(),
+            "--checks",
+            "grammar",
+            "--passive-max",
+            "50",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"grammar\""));
+}
+
+// =============================================================================
 // Error Cases
 // =============================================================================
 
