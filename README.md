@@ -7,6 +7,8 @@
 
 **bito** = **b**uilding **i**n **t**he **o**pen.
 
+bito-lint is part of the [building-in-the-open](https://github.com/claylo/building-in-the-open) approach to AI-assisted development — a set of practices, templates, and tools for teams that work with coding agents. It can be used entirely on its own; the broader framework just gives it more context to work with.
+
 AI coding agents generate documentation as they work — ADRs, design docs, changelogs, handoff notes. The quality varies between sessions. Sometimes you get crisp, well-structured prose. Sometimes you get bloated walls of text that no one wants to review.
 
 bito-lint catches the problems before you commit. It runs 18 deterministic writing checks — readability scoring, token budgets, section completeness, grammar, dialect enforcement, and style analysis. No LLM, no API calls, no network. Same input, same result, every time.
@@ -101,13 +103,24 @@ Download from the [releases page](https://github.com/claylo/bito-lint/releases).
 
 ## Usage
 
+### Config-driven linting
+
+Define rules in your config file to map file paths to checks, then run them with one command:
+
+```bash
+bito-lint lint docs/handoff.md
+bito-lint lint --json docs/handoff.md   # structured output for CI
+```
+
+If no rules match the file, it exits cleanly. See [docs/README.md](docs/README.md) for rules configuration, accumulation, specificity, and inline suppressions.
+
 ### Full analysis
 
 ```bash
 bito-lint analyze my-document.md
 ```
 
-Add `--json` for machine-readable output. Add `--dialect en-gb` to enforce British spelling. Add `--checks readability,consistency` to run only specific checks.
+Add `--json` for machine-readable output. Add `--dialect en-gb` to enforce British spelling. Add `--checks readability,consistency` to run only specific checks. Add `--exclude style,jargon` to skip specific checks.
 
 ### Quality gates
 
@@ -163,7 +176,7 @@ bito-lint includes a built-in [MCP](https://modelcontextprotocol.io/) server, so
 }
 ```
 
-This exposes six tools: `analyze_writing`, `count_tokens`, `check_readability`, `check_completeness`, `check_grammar`, and `get_info`. Total schema cost: ~1,283 tokens. See [docs/mcp-development.md](docs/mcp-development.md) for context budget details.
+This exposes seven tools: `analyze_writing`, `count_tokens`, `check_readability`, `check_completeness`, `check_grammar`, `lint_file`, and `get_info`. The `lint_file` tool resolves path-based rules from your config, so the agent can check quality before writing. Total schema cost: ~2,003 tokens. See [docs/mcp-development.md](docs/mcp-development.md) for context budget details.
 
 ## Configuration
 
