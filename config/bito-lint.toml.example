@@ -79,3 +79,61 @@ log_level = "info"
 # [templates]
 # release-notes = ["Summary", "Changes", "Breaking Changes", "Migration"]
 # rfc = ["Summary", "Motivation", "Detailed Design", "Drawbacks", "Alternatives"]
+
+# ------------------------------------------------------------------------------
+# Input Limits
+# ------------------------------------------------------------------------------
+
+# Maximum input file size in bytes.
+# Default: 5242880 (5 MiB)
+# max_input_bytes = 5242880
+
+# Disable the input size limit entirely (use with caution).
+# Default: false
+# disable_input_limit = false
+
+# Tokenizer backend: "claude" (default) or "openai".
+# tokenizer = "claude"
+
+# ------------------------------------------------------------------------------
+# Path-Based Rules
+# ------------------------------------------------------------------------------
+
+# Rules map file path patterns to checks. When you run `bito-lint lint <file>`,
+# matching rules determine which checks run. All matching rules accumulate;
+# when two rules configure the same check, the more specific pattern wins.
+#
+# The `lint_file` MCP tool uses the same rules, so AI agents get the same
+# quality gates as your CLI and CI pipelines.
+
+# Handoff documents: token budget + completeness
+# [[rules]]
+# paths = [".handoffs/*.md"]
+# [rules.checks.tokens]
+# budget = 4000
+# [rules.checks.completeness]
+# template = "handoff"
+
+# ADRs: completeness + full analysis
+# [[rules]]
+# paths = ["docs/decisions/*.md"]
+# [rules.checks.completeness]
+# template = "adr"
+# [rules.checks.analyze]
+# max_grade = 10.0
+
+# Design docs: completeness + readability ceiling
+# [[rules]]
+# paths = ["docs/designs/*.md"]
+# [rules.checks.completeness]
+# template = "design-doc"
+# [rules.checks.readability]
+# max_grade = 12.0
+
+# All other docs: readability + grammar gates
+# [[rules]]
+# paths = ["docs/**/*.md", "README.md"]
+# [rules.checks.readability]
+# max_grade = 8.0
+# [rules.checks.grammar]
+# passive_max = 20.0
