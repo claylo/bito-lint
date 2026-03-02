@@ -31,6 +31,7 @@ pub mod dictionaries;
 pub mod directives;
 pub mod error;
 pub mod grammar;
+pub mod lint;
 pub mod markdown;
 pub mod readability;
 pub mod rules;
