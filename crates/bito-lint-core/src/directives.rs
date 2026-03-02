@@ -60,6 +60,11 @@ impl SuppressionMap {
     }
 }
 
+/// Returns `true` if the given line contains a bito-lint directive comment.
+pub fn is_directive_line(line: &str) -> bool {
+    DIRECTIVE_RE.is_match(line)
+}
+
 /// Parse suppression directives from raw input text.
 ///
 /// Call this on the original text BEFORE markdown stripping.

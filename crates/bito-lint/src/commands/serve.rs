@@ -20,12 +20,14 @@ pub async fn cmd_serve(
     _args: ServeArgs,
     max_input_bytes: Option<usize>,
     config: bito_lint_core::Config,
+    config_dir: camino::Utf8PathBuf,
 ) -> Result<()> {
     tracing::info!("starting MCP server on stdio");
 
     let server = ProjectServer::new()
         .with_max_input_bytes(max_input_bytes)
-        .with_config(config);
+        .with_config(config)
+        .with_config_dir(config_dir);
     let service = server.serve(rmcp::transport::stdio()).await?;
     tracing::info!("MCP server ready, waiting for client");
     service.waiting().await?;

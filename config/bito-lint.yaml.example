@@ -1,9 +1,14 @@
 # bito-lint Configuration (YAML format)
 #
 # Copy this file to one of the following locations:
+#   - bito-lint.yaml (in your project directory, highest precedence)
 #   - .bito-lint.yaml (in your project directory)
-#   - bito-lint.yaml (in your project directory)
+#   - bito.yaml (in your project directory, shared with other bito tools)
+#   - .bito.yaml (in your project directory)
 #   - ~/.config/bito-lint/config.yaml (user-wide config)
+#
+# When multiple files exist in the same directory, all are merged.
+# bito-lint names override bito names; regular files override dotfiles.
 #
 # Supported formats: TOML, YAML, JSON
 # (use the appropriate extension: .toml, .yaml, .yml, .json)
@@ -147,3 +152,25 @@ log_level: info
 #         max_grade: 8.0
 #       grammar:
 #         passive_max: 20.0
+
+# ------------------------------------------------------------------------------
+# Custom Content Entries
+# ------------------------------------------------------------------------------
+
+# Define named content entries that plugins and agents consume at session start.
+# Each entry is a name mapping to either inline instructions or a file path.
+# If both are set, the file takes precedence.
+#
+# Plugins define which entry names they look for. Users populate those names
+# in their config. No forking required.
+
+# custom:
+#   voice:
+#     file: "docs/voice-and-tone.md"
+#   house-style:
+#     instructions: |
+#       - Always use Oxford comma
+#       - Prefer "we" over "I"
+#       - Technical terms: lowercase unless proper noun
+#   glossary:
+#     file: "docs/glossary.md"

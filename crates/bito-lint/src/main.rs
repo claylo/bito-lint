@@ -105,15 +105,25 @@ fn main() -> anyhow::Result<()> {
             commands::grammar::cmd_grammar(args, cli.json, config.passive_max_percent, max_input)
         }
         Commands::Lint(args) => commands::lint::cmd_lint(args, cli.json, &config, max_input),
+        Commands::Custom(args) => {
+            commands::custom::cmd_custom(args, cli.json, &config, &config_sources)
+        }
         Commands::Doctor(args) => {
             commands::doctor::cmd_doctor(args, cli.json, &config, &config_sources, &cwd)
         }
         Commands::Info(args) => commands::info::cmd_info(args, cli.json, &config, &config_sources),
         #[cfg(feature = "mcp")]
         Commands::Serve(args) => {
+            let config_dir = config_sources
+                .primary_file()
+                .and_then(|p| p.parent())
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| camino::Utf8PathBuf::from("."));
             let rt = tokio::runtime::Runtime::new()
                 .context("failed to create async runtime for MCP server")?;
-            rt.block_on(commands::serve::cmd_serve(args, max_input, config))
+            rt.block_on(commands::serve::cmd_serve(
+                args, max_input, config, config_dir,
+            ))
         }
     };
     if let Err(ref err) = result {

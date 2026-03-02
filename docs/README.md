@@ -14,6 +14,7 @@ bito-lint has two modes of operation: **config-driven** (`lint`) and **ad-hoc** 
 | `grammar` | Pass/fail on passive voice percentage | Single-purpose gate |
 | `completeness` | Pass/fail on required template sections | Single-purpose gate |
 | `tokens` | Pass/fail on token budget | Single-purpose gate |
+| `custom` | List or show custom content entries | Plugin/agent configuration |
 | `doctor` | Diagnose configuration and environment | Debugging setup issues |
 | `info` | Show package and config information | Quick reference |
 | `serve` | Start MCP server on stdio | IDE/agent integration |
@@ -52,6 +53,18 @@ bito-lint tokens --budget 4000 docs/design.md
 ```
 
 For full flag details, run `bito-lint <command> --help`.
+
+### custom
+
+List and inspect custom content entries defined in your config. Plugins and agents use named entries to load project-specific instructions (voice guidelines, house style, glossaries, etc.) at session start.
+
+```bash
+bito-lint custom list                  # show all defined entry names
+bito-lint custom show voice            # print resolved content for "voice"
+bito-lint custom show voice --json     # structured output
+```
+
+See [Custom content entries](#custom-content-entries) for configuration details.
 
 ### doctor and info
 
@@ -196,6 +209,20 @@ An unclosed `disable` directive suppresses the check for the entire file:
 This whole file opts out of the style check.
 ```
 
+### Suppression filtering behavior
+
+Region-level directives (`disable`/`enable` blocks and `disable-next-line`) work by filtering content before individual checks run. This means they can suppress checks that operate on individual sentences or lines:
+
+- Grammar issues (passive voice, etc.)
+- Sticky sentences
+- Long sentences
+- Complex paragraphs
+- Echoes
+
+Aggregate-only checks that need the full document to produce a meaningful score -- readability, pacing, transitions, style -- can only be suppressed at file level (unclosed `disable`).
+
+`disable-next-line` applies to the immediately following line only.
+
 ## Configuration reference
 
 ### Config file discovery
@@ -204,9 +231,13 @@ bito-lint searches for config files in this order:
 
 1. **Explicit** -- `--config <file>` flag
 2. **Project** -- walk up from current directory, stopping at `.git`:
+   - `.bito.toml`, `.bito.yaml`, `.bito.yml`, `.bito.json` (shared with other bito tools)
+   - `bito.toml`, `bito.yaml`, `bito.yml`, `bito.json`
    - `.bito-lint.toml`, `.bito-lint.yaml`, `.bito-lint.yml`, `.bito-lint.json`
    - `bito-lint.toml`, `bito-lint.yaml`, `bito-lint.yml`, `bito-lint.json`
 3. **User** -- `~/.config/bito-lint/config.{toml,yaml,yml,json}`
+
+When multiple project-level config files exist in the same directory, all are merged. Later files in the precedence list override earlier ones, so `bito-lint.yaml` overrides `.bito.yaml` for any shared keys.
 
 Precedence (highest to lowest): CLI flags > environment variables > explicit config > project config > user config > defaults.
 
@@ -236,6 +267,7 @@ BITO_LINT_TOKENIZER=openai
 | `tokenizer` | string | `claude` | Tokenizer backend: `claude` or `openai` |
 | `templates` | map | none | Custom completeness templates (name to section headings) |
 | `rules` | array | none | Path-based lint rules (see [Rules configuration](#rules-configuration)) |
+| `custom` | map | none | Custom content entries (see [Custom content entries](#custom-content-entries)) |
 
 ### Built-in completeness templates
 
@@ -324,3 +356,60 @@ rules:
       grammar:
         passive_max: 20.0
 ```
+
+## Custom content entries
+
+Custom entries let you attach named content -- voice guidelines, house style rules, glossaries -- to your config. Plugins and agents look up entries by name at session start, so you can customize their behavior without forking anything.
+
+Each entry maps a name to either inline `instructions` or a `file` path. If both are set, `file` takes precedence.
+
+### YAML
+
+```yaml
+custom:
+  voice:
+    file: "docs/voice-and-tone.md"
+  house-style:
+    instructions: |
+      - Always use Oxford comma
+      - Prefer "we" over "I"
+      - Technical terms: lowercase unless proper noun
+  glossary:
+    file: "docs/glossary.md"
+```
+
+### TOML
+
+```toml
+[custom.voice]
+file = "docs/voice-and-tone.md"
+
+[custom.house-style]
+instructions = """
+- Always use Oxford comma
+- Prefer "we" over "I"
+- Technical terms: lowercase unless proper noun
+"""
+
+[custom.glossary]
+file = "docs/glossary.md"
+```
+
+File paths are resolved relative to the config file's directory. Use `bito-lint custom list` and `bito-lint custom show <name>` to verify resolution.
+
+## MCP tools
+
+The MCP server (`bito-lint serve`) exposes 8 tools for AI agent integration:
+
+| Tool | Description |
+|------|-------------|
+| `get_info` | Project name, version, and description |
+| `count_tokens` | Count tokens with optional budget gate |
+| `check_readability` | Flesch-Kincaid grade level gate |
+| `check_completeness` | Template section validation |
+| `check_grammar` | Passive voice percentage gate |
+| `analyze_writing` | Full 18-check writing analysis |
+| `lint_file` | Config-driven lint (same rules as CLI) |
+| `get_custom` | Retrieve a named custom content entry |
+
+All tools that accept text validate input size against the configured `max_input_bytes` limit.

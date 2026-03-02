@@ -5,6 +5,7 @@ use camino::Utf8Path;
 
 pub mod analyze;
 pub mod completeness;
+pub mod custom;
 pub mod doctor;
 pub mod grammar;
 pub mod info;

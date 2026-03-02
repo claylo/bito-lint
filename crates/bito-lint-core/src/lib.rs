@@ -39,7 +39,7 @@ pub mod text;
 pub mod tokens;
 pub mod word_lists;
 
-pub use config::{Config, ConfigLoader, Dialect, LogLevel};
+pub use config::{Config, ConfigLoader, CustomEntry, Dialect, LogLevel};
 pub use error::{AnalysisError, AnalysisResult, ConfigError, ConfigResult};
 pub use tokens::Backend;
 

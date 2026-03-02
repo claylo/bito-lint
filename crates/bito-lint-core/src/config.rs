@@ -13,11 +13,16 @@
 //! - JSON (`.json`)
 //!
 //! # Config file locations (in order of precedence, highest first):
-//! - `.bito-lint.<ext>` in current directory or any parent
 //! - `bito-lint.<ext>` in current directory or any parent
+//! - `.bito-lint.<ext>` in current directory or any parent
+//! - `bito.<ext>` in current directory or any parent
+//! - `.bito.<ext>` in current directory or any parent
 //! - `~/.config/bito-lint/config.<ext>` (user config)
 //!
 //! Where `<ext>` is one of: `toml`, `yaml`, `yml`, `json`
+//!
+//! When multiple files exist in the same directory, all are merged via figment.
+//! Later extensions override earlier: toml < yaml < yml < json.
 //!
 //! # Example
 //! ```no_run
@@ -133,6 +138,46 @@ pub struct TokensRuleConfig {
     pub tokenizer: Option<Backend>,
 }
 
+/// A named custom content entry for plugin customization.
+///
+/// Plugins and agents read these entries at session start to inject
+/// personas, voice guides, style rules, glossaries, etc. into context.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct CustomEntry {
+    /// Inline markdown instructions.
+    pub instructions: Option<String>,
+    /// Path to a markdown file (relative to config file location, or absolute).
+    pub file: Option<Utf8PathBuf>,
+}
+
+impl CustomEntry {
+    /// Resolve this entry to its content string.
+    ///
+    /// If `file` is set, reads the file (resolving relative paths against
+    /// `config_dir`). Otherwise returns inline `instructions`.
+    #[allow(clippy::option_if_let_else)]
+    pub fn resolve(&self, config_dir: &Utf8Path) -> Result<String, ConfigError> {
+        if let Some(ref file_path) = self.file {
+            let resolved = if file_path.is_relative() {
+                config_dir.join(file_path)
+            } else {
+                file_path.clone()
+            };
+            std::fs::read_to_string(resolved.as_std_path()).map_err(|e| {
+                ConfigError::CustomEntryFile {
+                    path: resolved,
+                    source: e,
+                }
+            })
+        } else if let Some(ref instructions) = self.instructions {
+            Ok(instructions.clone())
+        } else {
+            Err(ConfigError::CustomEntryEmpty)
+        }
+    }
+}
+
 /// Checks to run for a path-based rule.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(default)]
@@ -208,6 +253,8 @@ pub struct Config {
     /// All matching rules accumulate; more specific patterns override
     /// less specific ones when they configure the same check.
     pub rules: Option<Vec<Rule>>,
+    /// Custom content entries for plugin customization.
+    pub custom: Option<HashMap<String, CustomEntry>>,
 }
 
 /// Log level configuration.
@@ -243,9 +290,9 @@ impl LogLevel {
 /// can report the actual config files without re-discovering them.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct ConfigSources {
-    /// Project config file found by walking up from the search root.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub project_file: Option<Utf8PathBuf>,
+    /// Project config files found by walking up, ordered low→high precedence.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub project_files: Vec<Utf8PathBuf>,
     /// User config file from XDG config directory.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_file: Option<Utf8PathBuf>,
@@ -257,12 +304,12 @@ pub struct ConfigSources {
 impl ConfigSources {
     /// Returns the highest-precedence config file that was loaded.
     ///
-    /// Precedence: explicit files > project file > user file.
+    /// Precedence: explicit files > project files > user file.
     pub fn primary_file(&self) -> Option<&Utf8Path> {
         self.explicit_files
             .last()
             .map(Utf8PathBuf::as_path)
-            .or(self.project_file.as_deref())
+            .or_else(|| self.project_files.last().map(Utf8PathBuf::as_path))
             .or(self.user_file.as_deref())
     }
 }
@@ -272,6 +319,9 @@ const CONFIG_EXTENSIONS: &[&str] = &["toml", "yaml", "yml", "json"];
 
 /// Application name for XDG directory lookup and config file names.
 const APP_NAME: &str = "bito-lint";
+
+/// Application names to search for config files (in precedence order, lowest first).
+const APP_NAMES: &[&str] = &["bito", "bito-lint"];
 
 /// Builder for loading configuration from multiple sources.
 #[derive(Debug, Default)]
@@ -360,12 +410,13 @@ impl ConfigLoader {
             sources.user_file = Some(user_config);
         }
 
-        // Add project config
-        if let Some(ref root) = self.project_search_root
-            && let Some(project_config) = self.find_project_config(root)
-        {
-            figment = Self::merge_file(figment, &project_config);
-            sources.project_file = Some(project_config);
+        // Add project configs (ordered low→high precedence)
+        if let Some(ref root) = self.project_search_root {
+            let project_configs = self.find_project_configs(root);
+            for pc in &project_configs {
+                figment = Self::merge_file(figment, pc);
+            }
+            sources.project_files = project_configs;
         }
 
         // Add explicit files
@@ -394,8 +445,8 @@ impl ConfigLoader {
         let has_project = self
             .project_search_root
             .as_ref()
-            .and_then(|root| self.find_project_config(root))
-            .is_some();
+            .map(|root| !self.find_project_configs(root).is_empty())
+            .unwrap_or(false);
         let has_explicit = !self.explicit_files.is_empty();
 
         if !has_user && !has_project && !has_explicit {
@@ -405,24 +456,41 @@ impl ConfigLoader {
         self.load()
     }
 
-    /// Find project config by walking up from the given directory.
-    fn find_project_config(&self, start: &Utf8Path) -> Option<Utf8PathBuf> {
+    /// Find project config files by walking up from the given directory.
+    ///
+    /// Returns all matching config files from the closest directory that has any
+    /// match, ordered low-to-high precedence: `bito` names before `bito-lint`
+    /// names, dotfiles before regular files within each app name.
+    fn find_project_configs(&self, start: &Utf8Path) -> Vec<Utf8PathBuf> {
         let mut current = Some(start.to_path_buf());
 
         while let Some(dir) = current {
-            // Check for config files in this directory (try each extension)
-            for ext in CONFIG_EXTENSIONS {
-                // Try dotfile first (.bito-lint.toml)
-                let dotfile = dir.join(format!(".{APP_NAME}.{ext}"));
-                if dotfile.is_file() {
-                    return Some(dotfile);
-                }
+            let mut found = Vec::new();
 
-                // Then try regular name (bito-lint.toml)
-                let regular = dir.join(format!("{APP_NAME}.{ext}"));
-                if regular.is_file() {
-                    return Some(regular);
+            // Search order (low→high precedence, figment merges last-wins):
+            //   1. .bito.{toml,yaml,yml,json}
+            //   2. bito.{toml,yaml,yml,json}
+            //   3. .bito-lint.{toml,yaml,yml,json}
+            //   4. bito-lint.{toml,yaml,yml,json}
+            for app_name in APP_NAMES {
+                // Dotfiles first (lower precedence within same app name)
+                for ext in CONFIG_EXTENSIONS {
+                    let dotfile = dir.join(format!(".{app_name}.{ext}"));
+                    if dotfile.is_file() {
+                        found.push(dotfile);
+                    }
                 }
+                // Regular files (higher precedence within same app name)
+                for ext in CONFIG_EXTENSIONS {
+                    let regular = dir.join(format!("{app_name}.{ext}"));
+                    if regular.is_file() {
+                        found.push(regular);
+                    }
+                }
+            }
+
+            if !found.is_empty() {
+                return found;
             }
 
             // Check for boundary marker AFTER checking config files,
@@ -437,7 +505,7 @@ impl ConfigLoader {
             current = dir.parent().map(Utf8Path::to_path_buf);
         }
 
-        None
+        Vec::new()
     }
 
     /// Find user config in XDG config directory.
@@ -616,7 +684,7 @@ log_dir = "/tmp/bito-lint"
             .unwrap();
 
         assert_eq!(config.log_level, LogLevel::Debug);
-        assert!(sources.project_file.is_some());
+        assert!(!sources.project_files.is_empty());
     }
 
     #[test]
@@ -648,7 +716,7 @@ log_dir = "/tmp/bito-lint"
 
         // Should get default since config is beyond boundary
         assert_eq!(config.log_level, LogLevel::Info);
-        assert!(sources.project_file.is_none());
+        assert!(sources.project_files.is_empty());
     }
 
     #[test]
@@ -677,7 +745,7 @@ log_dir = "/tmp/bito-lint"
 
         // Explicit file wins over project config
         assert_eq!(config.log_level, LogLevel::Error);
-        assert!(sources.project_file.is_some());
+        assert!(!sources.project_files.is_empty());
         assert_eq!(sources.explicit_files.len(), 1);
     }
 
@@ -894,5 +962,211 @@ rules:
         let yaml = "log_level: info\n";
         let config: Config = serde_yaml::from_str(yaml).unwrap();
         assert!(config.rules.is_none());
+    }
+
+    #[test]
+    fn bito_config_discovered() {
+        let tmp = TempDir::new().unwrap();
+        let config_path = tmp.path().join(".bito.toml");
+        fs::write(&config_path, r#"log_level = "debug""#).unwrap();
+
+        let tmp_path = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+
+        let (config, sources) = ConfigLoader::new()
+            .with_user_config(false)
+            .without_boundary_marker()
+            .with_project_search(&tmp_path)
+            .load()
+            .unwrap();
+
+        assert_eq!(config.log_level, LogLevel::Debug);
+        assert!(!sources.project_files.is_empty());
+    }
+
+    #[test]
+    fn bito_lint_overrides_bito_config() {
+        let tmp = TempDir::new().unwrap();
+        // .bito.toml sets debug
+        fs::write(tmp.path().join(".bito.toml"), r#"log_level = "debug""#).unwrap();
+        // .bito-lint.toml sets warn — should win
+        fs::write(tmp.path().join(".bito-lint.toml"), r#"log_level = "warn""#).unwrap();
+
+        let tmp_path = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+
+        let (config, sources) = ConfigLoader::new()
+            .with_user_config(false)
+            .without_boundary_marker()
+            .with_project_search(&tmp_path)
+            .load()
+            .unwrap();
+
+        assert_eq!(config.log_level, LogLevel::Warn);
+        assert_eq!(sources.project_files.len(), 2);
+    }
+
+    #[test]
+    fn bito_and_bito_lint_merge() {
+        let tmp = TempDir::new().unwrap();
+        // .bito.toml sets dialect
+        fs::write(tmp.path().join(".bito.toml"), "dialect = \"en-gb\"\n").unwrap();
+        // .bito-lint.toml sets log_level — both should be present
+        fs::write(tmp.path().join(".bito-lint.toml"), r#"log_level = "warn""#).unwrap();
+
+        let tmp_path = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+
+        let (config, _sources) = ConfigLoader::new()
+            .with_user_config(false)
+            .without_boundary_marker()
+            .with_project_search(&tmp_path)
+            .load()
+            .unwrap();
+
+        // Both values merged
+        assert_eq!(config.log_level, LogLevel::Warn);
+        assert_eq!(config.dialect, Some(Dialect::EnGb));
+    }
+
+    #[test]
+    fn dotfile_before_regular_same_app_name() {
+        let tmp = TempDir::new().unwrap();
+        // .bito-lint.toml sets debug (lower precedence — dotfile)
+        fs::write(tmp.path().join(".bito-lint.toml"), r#"log_level = "debug""#).unwrap();
+        // bito-lint.toml sets error (higher precedence — regular)
+        fs::write(tmp.path().join("bito-lint.toml"), r#"log_level = "error""#).unwrap();
+
+        let tmp_path = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+
+        let (config, sources) = ConfigLoader::new()
+            .with_user_config(false)
+            .without_boundary_marker()
+            .with_project_search(&tmp_path)
+            .load()
+            .unwrap();
+
+        assert_eq!(config.log_level, LogLevel::Error);
+        assert_eq!(sources.project_files.len(), 2);
+    }
+
+    #[test]
+    fn only_closest_directory_contributes() {
+        let tmp = TempDir::new().unwrap();
+        let parent = tmp.path().join("parent");
+        let child = parent.join("child");
+        fs::create_dir_all(&child).unwrap();
+
+        // Config in parent
+        fs::write(parent.join(".bito.toml"), r#"log_level = "warn""#).unwrap();
+        // Config in child (closer) — only this dir should contribute
+        fs::write(child.join(".bito-lint.toml"), r#"log_level = "error""#).unwrap();
+
+        let child_path = Utf8PathBuf::try_from(child).unwrap();
+
+        let (config, sources) = ConfigLoader::new()
+            .with_user_config(false)
+            .without_boundary_marker()
+            .with_project_search(&child_path)
+            .load()
+            .unwrap();
+
+        // Only child's config should be found — parent's .bito.toml ignored
+        assert_eq!(config.log_level, LogLevel::Error);
+        assert_eq!(sources.project_files.len(), 1);
+    }
+
+    #[test]
+    fn custom_entries_deserialize_from_yaml() {
+        let yaml = r#"
+custom:
+  voice:
+    instructions: "Write clearly and directly."
+  house-style:
+    file: "docs/style.md"
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        let custom = config.custom.expect("custom should be present");
+        assert_eq!(custom.len(), 2);
+        let voice = custom.get("voice").unwrap();
+        assert_eq!(
+            voice.instructions.as_deref(),
+            Some("Write clearly and directly.")
+        );
+        assert!(voice.file.is_none());
+        let style = custom.get("house-style").unwrap();
+        assert!(style.instructions.is_none());
+        assert_eq!(style.file.as_ref().unwrap().as_str(), "docs/style.md");
+    }
+
+    #[test]
+    fn custom_entries_default_to_none() {
+        let config = Config::default();
+        assert!(config.custom.is_none());
+    }
+
+    #[test]
+    fn resolve_custom_entry_inline() {
+        let entry = CustomEntry {
+            instructions: Some("Be concise.".to_string()),
+            file: None,
+        };
+        let result = entry.resolve(Utf8Path::new("/tmp")).unwrap();
+        assert_eq!(result, "Be concise.");
+    }
+
+    #[test]
+    fn resolve_custom_entry_file() {
+        let tmp = TempDir::new().unwrap();
+        let file_path = tmp.path().join("voice.md");
+        fs::write(&file_path, "Write like Clay.").unwrap();
+        let tmp_path = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+
+        let entry = CustomEntry {
+            instructions: None,
+            file: Some(Utf8PathBuf::from("voice.md")),
+        };
+        let result = entry.resolve(&tmp_path).unwrap();
+        assert_eq!(result, "Write like Clay.");
+    }
+
+    #[test]
+    fn resolve_custom_entry_file_wins_over_inline() {
+        let tmp = TempDir::new().unwrap();
+        let file_path = tmp.path().join("voice.md");
+        fs::write(&file_path, "From file.").unwrap();
+        let tmp_path = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+
+        let entry = CustomEntry {
+            instructions: Some("From inline.".to_string()),
+            file: Some(Utf8PathBuf::from("voice.md")),
+        };
+        let result = entry.resolve(&tmp_path).unwrap();
+        assert_eq!(result, "From file.");
+    }
+
+    #[test]
+    fn resolve_custom_entry_empty_errors() {
+        let entry = CustomEntry {
+            instructions: None,
+            file: None,
+        };
+        let result = entry.resolve(Utf8Path::new("/tmp"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn bito_yaml_discovered() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("bito.yaml"), "log_level: debug\n").unwrap();
+
+        let tmp_path = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+
+        let (config, sources) = ConfigLoader::new()
+            .with_user_config(false)
+            .without_boundary_marker()
+            .with_project_search(&tmp_path)
+            .load()
+            .unwrap();
+
+        assert_eq!(config.log_level, LogLevel::Debug);
+        assert_eq!(sources.project_files.len(), 1);
     }
 }
