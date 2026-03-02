@@ -43,7 +43,7 @@ default = ["mcp"]
 mcp = ["dep:tokio", "dep:rmcp", "dep:schemars"]
 
 [dependencies]
-bito-lint-core = { version = "0.1", path = "../bito-lint-core", features = ["clap"] }
+bito-lint-core = { version = "0.2", path = "../bito-lint-core", features = ["clap"] }
 clap = { version = "4.5", features = ["derive"] }
 anyhow = "1.0"
 tracing = "0.1"

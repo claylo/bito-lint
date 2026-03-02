@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-03-02
+
+### Features
+
+- Add path-based lint rules, inline suppressions, and lint CLI/MCP (#18) by @claylo in [#18](https://github.com/claylo/bito-lint/pull/18)
+
+
+
+
+**Full Changelog**: [v0.1.7...v0.2.0](https://github.com/claylo/bito-lint/compare/v0.1.7...v0.2.0)
+
+
 ## [0.1.7] - 2026-02-28
 
 ### Miscellaneous Tasks
