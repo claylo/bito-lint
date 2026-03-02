@@ -76,7 +76,12 @@ pub fn run_lint(
             let checks_ref = check_list.as_deref();
 
             let report = analysis::run_full_analysis(
-                content, strip_md, checks_ref, max_grade, passive_max, dialect,
+                content,
+                strip_md,
+                checks_ref,
+                max_grade,
+                passive_max,
+                dialect,
             )?;
             let style_min = ac.style_min.or(config.style_min_score);
             if let (Some(min), Some(st)) = (style_min, &report.style)
@@ -181,8 +186,7 @@ fn resolve_analyze_checks(ac: &AnalyzeRuleConfig) -> AnalysisResult<Option<Vec<S
 mod tests {
     use super::*;
     use crate::config::{
-        AnalyzeRuleConfig, CompletenessRuleConfig, Config, ReadabilityRuleConfig,
-        TokensRuleConfig,
+        AnalyzeRuleConfig, CompletenessRuleConfig, Config, ReadabilityRuleConfig, TokensRuleConfig,
     };
     use crate::rules::ResolvedChecks;
 
@@ -286,13 +290,7 @@ mod tests {
             }),
             ..Default::default()
         };
-        let report = run_lint(
-            "doc.md",
-            "The cat sat on the mat.",
-            &resolved,
-            &config,
-        )
-        .unwrap();
+        let report = run_lint("doc.md", "The cat sat on the mat.", &resolved, &config).unwrap();
         assert!(report.readability.is_some());
         assert!(report.pass);
     }

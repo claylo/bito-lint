@@ -9,8 +9,8 @@
 use globset::{Glob, GlobMatcher};
 
 use crate::config::{
-    AnalyzeRuleConfig, CompletenessRuleConfig, GrammarRuleConfig,
-    ReadabilityRuleConfig, Rule, RuleChecks, TokensRuleConfig,
+    AnalyzeRuleConfig, CompletenessRuleConfig, GrammarRuleConfig, ReadabilityRuleConfig, Rule,
+    RuleChecks, TokensRuleConfig,
 };
 
 /// Compiled rule set for efficient matching.
@@ -73,13 +73,11 @@ impl RuleSet {
                 let matchers: Vec<(GlobMatcher, usize)> = rule
                     .paths
                     .iter()
-                    .filter_map(|pattern| {
-                        match Glob::new(pattern) {
-                            Ok(glob) => Some((glob.compile_matcher(), specificity(pattern))),
-                            Err(e) => {
-                                tracing::warn!(pattern, error = %e, "skipping invalid glob pattern");
-                                None
-                            }
+                    .filter_map(|pattern| match Glob::new(pattern) {
+                        Ok(glob) => Some((glob.compile_matcher(), specificity(pattern))),
+                        Err(e) => {
+                            tracing::warn!(pattern, error = %e, "skipping invalid glob pattern");
+                            None
                         }
                     })
                     .collect();
@@ -123,21 +121,16 @@ impl RuleSet {
                 continue;
             };
 
-            if rule.checks.analyze.is_some()
-                && analyze_spec.is_none_or(|prev| spec > prev)
-            {
+            if rule.checks.analyze.is_some() && analyze_spec.is_none_or(|prev| spec > prev) {
                 result.analyze = rule.checks.analyze.clone();
                 analyze_spec = Some(spec);
             }
-            if rule.checks.readability.is_some()
-                && readability_spec.is_none_or(|prev| spec > prev)
+            if rule.checks.readability.is_some() && readability_spec.is_none_or(|prev| spec > prev)
             {
                 result.readability = rule.checks.readability.clone();
                 readability_spec = Some(spec);
             }
-            if rule.checks.grammar.is_some()
-                && grammar_spec.is_none_or(|prev| spec > prev)
-            {
+            if rule.checks.grammar.is_some() && grammar_spec.is_none_or(|prev| spec > prev) {
                 result.grammar = rule.checks.grammar.clone();
                 grammar_spec = Some(spec);
             }
@@ -147,9 +140,7 @@ impl RuleSet {
                 result.completeness = rule.checks.completeness.clone();
                 completeness_spec = Some(spec);
             }
-            if rule.checks.tokens.is_some()
-                && tokens_spec.is_none_or(|prev| spec > prev)
-            {
+            if rule.checks.tokens.is_some() && tokens_spec.is_none_or(|prev| spec > prev) {
                 result.tokens = rule.checks.tokens.clone();
                 tokens_spec = Some(spec);
             }

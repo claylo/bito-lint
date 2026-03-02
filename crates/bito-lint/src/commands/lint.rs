@@ -85,12 +85,25 @@ pub fn cmd_lint(
     }
 
     if let Some(ref r) = report.readability {
-        let status = if r.over_max { "FAIL".red().to_string() } else { "PASS".green().to_string() };
-        println!("  {} {} grade {:.1}", "readability:".cyan(), status, r.grade);
+        let status = if r.over_max {
+            "FAIL".red().to_string()
+        } else {
+            "PASS".green().to_string()
+        };
+        println!(
+            "  {} {} grade {:.1}",
+            "readability:".cyan(),
+            status,
+            r.grade
+        );
     }
 
     if let Some(ref g) = report.grammar {
-        let status = if g.over_max { "FAIL".red().to_string() } else { "PASS".green().to_string() };
+        let status = if g.over_max {
+            "FAIL".red().to_string()
+        } else {
+            "PASS".green().to_string()
+        };
         println!(
             "  {} {} {:.1}% passive",
             "grammar:".cyan(),
@@ -100,12 +113,20 @@ pub fn cmd_lint(
     }
 
     if let Some(ref c) = report.completeness {
-        let status = if c.pass { "PASS".green().to_string() } else { "FAIL".red().to_string() };
+        let status = if c.pass {
+            "PASS".green().to_string()
+        } else {
+            "FAIL".red().to_string()
+        };
         println!("  {} {} ({})", "completeness:".cyan(), status, c.template);
     }
 
     if let Some(ref t) = report.tokens {
-        let status = if t.over_budget { "FAIL".red().to_string() } else { "PASS".green().to_string() };
+        let status = if t.over_budget {
+            "FAIL".red().to_string()
+        } else {
+            "PASS".green().to_string()
+        };
         if let Some(budget) = t.budget {
             println!("  {} {} {}/{}", "tokens:".cyan(), status, t.count, budget);
         } else {

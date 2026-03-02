@@ -37,7 +37,9 @@ impl SuppressionMap {
                 if ranges.is_empty() {
                     return true; // File-level suppression
                 }
-                ranges.iter().any(|(start, end)| line >= *start && line <= *end)
+                ranges
+                    .iter()
+                    .any(|(start, end)| line >= *start && line <= *end)
             }
         }
     }
