@@ -49,6 +49,7 @@ aho-corasick = "1"
 bpe-openai = "0.3"
 
 [dev-dependencies]
+serde_yaml = "0.9"
 tempfile = "3.26"
 
 [lints]

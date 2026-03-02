@@ -82,6 +82,86 @@ impl std::fmt::Display for Dialect {
     }
 }
 
+/// Settings for the `analyze` check within a rule.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct AnalyzeRuleConfig {
+    /// Which of the 18 analysis checks to run. Omit for all.
+    pub checks: Option<Vec<String>>,
+    /// Which analysis checks to skip.
+    pub exclude: Option<Vec<String>>,
+    /// Maximum acceptable readability grade level.
+    pub max_grade: Option<f64>,
+    /// Maximum acceptable passive voice percentage.
+    pub passive_max: Option<f64>,
+    /// Minimum acceptable style score (0--100).
+    pub style_min: Option<i32>,
+    /// English dialect for spelling enforcement.
+    pub dialect: Option<Dialect>,
+}
+
+/// Settings for the `readability` check within a rule.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct ReadabilityRuleConfig {
+    /// Maximum acceptable Flesch-Kincaid grade level.
+    pub max_grade: Option<f64>,
+}
+
+/// Settings for the `grammar` check within a rule.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct GrammarRuleConfig {
+    /// Maximum acceptable passive voice percentage (0--100).
+    pub passive_max: Option<f64>,
+}
+
+/// Settings for the `completeness` check within a rule.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct CompletenessRuleConfig {
+    /// Template name (required): "adr", "handoff", "design-doc", or custom.
+    pub template: String,
+}
+
+/// Settings for the `tokens` check within a rule.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct TokensRuleConfig {
+    /// Maximum token budget. Omit for no limit.
+    pub budget: Option<usize>,
+    /// Tokenizer backend: "claude" (default) or "openai".
+    pub tokenizer: Option<Backend>,
+}
+
+/// Checks to run for a path-based rule.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct RuleChecks {
+    /// Run comprehensive writing analysis (18 checks).
+    pub analyze: Option<AnalyzeRuleConfig>,
+    /// Run standalone readability scoring (gate on grade level).
+    pub readability: Option<ReadabilityRuleConfig>,
+    /// Run standalone grammar checking (gate on passive voice).
+    pub grammar: Option<GrammarRuleConfig>,
+    /// Run completeness checking against a template.
+    pub completeness: Option<CompletenessRuleConfig>,
+    /// Run token counting (gate on budget).
+    pub tokens: Option<TokensRuleConfig>,
+}
+
+/// A path-based lint rule.
+///
+/// Glob patterns in `paths` are relative to the project root.
+/// All matching rules accumulate; when two rules configure the same
+/// check, the more specific pattern's settings win.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct Rule {
+    /// Glob patterns to match file paths against.
+    pub paths: Vec<String>,
+    /// Checks to run on matched files.
+    pub checks: RuleChecks,
+}
+
 /// The configuration for bito-lint.
 ///
 /// Add your configuration fields here. This struct is deserialized from
@@ -122,6 +202,12 @@ pub struct Config {
     /// These extend (not replace) the built-in templates (adr, handoff, design-doc).
     /// If a custom template name collides with a built-in, the custom one wins.
     pub templates: Option<HashMap<String, Vec<String>>>,
+    /// Path-based lint rules.
+    ///
+    /// Each rule maps glob patterns to checks with specific settings.
+    /// All matching rules accumulate; more specific patterns override
+    /// less specific ones when they configure the same check.
+    pub rules: Option<Vec<Rule>>,
 }
 
 /// Log level configuration.
@@ -768,5 +854,45 @@ log_dir = "/tmp/bito-lint"
         unsafe {
             std::env::remove_var("BITO_LINT_DIALECT");
         }
+    }
+
+    #[test]
+    fn rules_deserialize_from_yaml() {
+        let yaml = r#"
+rules:
+  - paths: ["docs/**/*.md"]
+    checks:
+      analyze:
+        max_grade: 8.0
+  - paths: [".handoffs/*.md"]
+    checks:
+      tokens:
+        budget: 2000
+      completeness:
+        template: handoff
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        let rules = config.rules.expect("rules should be present");
+        assert_eq!(rules.len(), 2);
+        assert_eq!(rules[0].paths, vec!["docs/**/*.md"]);
+        let analyze = rules[0].checks.analyze.as_ref().unwrap();
+        assert_eq!(analyze.max_grade, Some(8.0));
+        let tokens = rules[1].checks.tokens.as_ref().unwrap();
+        assert_eq!(tokens.budget, Some(2000));
+        let comp = rules[1].checks.completeness.as_ref().unwrap();
+        assert_eq!(comp.template, "handoff");
+    }
+
+    #[test]
+    fn rules_default_to_none() {
+        let config = Config::default();
+        assert!(config.rules.is_none());
+    }
+
+    #[test]
+    fn empty_config_still_works_with_rules_field() {
+        let yaml = "log_level: info\n";
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        assert!(config.rules.is_none());
     }
 }
