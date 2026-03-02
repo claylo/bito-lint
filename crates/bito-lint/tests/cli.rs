@@ -332,6 +332,140 @@ fn lint_help_shows_usage() {
         .stdout(predicate::str::contains("Lint a file"));
 }
 
+#[test]
+fn lint_with_config_rules_runs_checks() {
+    let dir = tempfile::tempdir().unwrap();
+
+    // Create a config file with rules
+    let config_path = dir.path().join(".bito-lint.yaml");
+    std::fs::write(
+        &config_path,
+        r#"
+rules:
+  - paths: ["docs/**/*.md"]
+    checks:
+      readability:
+        max_grade: 20
+"#,
+    )
+    .unwrap();
+
+    // Create the file to lint (matching path)
+    let docs_dir = dir.path().join("docs");
+    std::fs::create_dir_all(&docs_dir).unwrap();
+    let file_path = docs_dir.join("guide.md");
+    std::fs::write(&file_path, "The cat sat on the mat. The dog ran fast.").unwrap();
+
+    cmd()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--config",
+            config_path.to_str().unwrap(),
+            "lint",
+            "docs/guide.md",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("readability"));
+}
+
+#[test]
+fn lint_no_match_skips_cleanly() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let config_path = dir.path().join(".bito-lint.yaml");
+    std::fs::write(
+        &config_path,
+        "rules:\n  - paths: [\"docs/**/*.md\"]\n    checks:\n      readability:\n        max_grade: 20\n",
+    )
+    .unwrap();
+
+    let file_path = dir.path().join("random.txt");
+    std::fs::write(&file_path, "Some text here for analysis.").unwrap();
+
+    cmd()
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "lint",
+            file_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("no rules match"));
+}
+
+#[test]
+fn lint_json_output_has_pass_field() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let config_path = dir.path().join(".bito-lint.yaml");
+    std::fs::write(
+        &config_path,
+        r#"
+rules:
+  - paths: ["**/*.md"]
+    checks:
+      readability:
+        max_grade: 20
+"#,
+    )
+    .unwrap();
+
+    let file_path = dir.path().join("test.md");
+    std::fs::write(&file_path, "The cat sat on the mat. The dog ran fast.").unwrap();
+
+    let output = cmd()
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "--json",
+            "lint",
+            file_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8_lossy(&output.get_output().stdout);
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout).expect("lint --json should output valid JSON");
+    assert!(json["pass"].as_bool().unwrap());
+    assert!(json["readability"].is_object());
+}
+
+#[test]
+fn lint_with_tokens_budget() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let config_path = dir.path().join(".bito-lint.yaml");
+    std::fs::write(
+        &config_path,
+        r#"
+rules:
+  - paths: ["**/*.md"]
+    checks:
+      tokens:
+        budget: 1000000
+"#,
+    )
+    .unwrap();
+
+    let file_path = dir.path().join("test.md");
+    std::fs::write(&file_path, "Short document.").unwrap();
+
+    cmd()
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "lint",
+            file_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("tokens"));
+}
+
 // =============================================================================
 // Chdir Flag
 // =============================================================================
