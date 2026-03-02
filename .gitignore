@@ -57,3 +57,5 @@ commit.txt
 # for little tests, scripts or notes
 scratch
 scratch/
+
+.private-journal/

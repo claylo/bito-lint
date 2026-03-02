@@ -8,6 +8,7 @@ pub mod completeness;
 pub mod doctor;
 pub mod grammar;
 pub mod info;
+pub mod lint;
 pub mod readability;
 #[cfg(feature = "mcp")]
 pub mod serve;

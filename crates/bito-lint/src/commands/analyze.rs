@@ -1,5 +1,7 @@
 //! Analyze command — comprehensive writing analysis.
 
+use std::collections::HashSet;
+
 use anyhow::{Context, bail};
 use camino::Utf8PathBuf;
 use clap::Args;
@@ -7,6 +9,7 @@ use owo_colors::OwoColorize;
 use tracing::{debug, instrument};
 
 use bito_lint_core::analysis;
+use bito_lint_core::analysis::ALL_CHECKS;
 use bito_lint_core::config::Dialect;
 
 use super::read_input_file;
@@ -18,12 +21,24 @@ pub struct AnalyzeArgs {
     pub file: Utf8PathBuf,
 
     /// Checks to run (comma-separated). Omit for all checks.
-    #[arg(long, value_delimiter = ',')]
+    #[arg(long, value_delimiter = ',', conflicts_with = "exclude")]
     pub checks: Option<Vec<String>>,
+
+    /// Checks to skip (comma-separated). Runs all checks except these.
+    #[arg(long, value_delimiter = ',', conflicts_with = "checks")]
+    pub exclude: Option<Vec<String>>,
 
     /// Minimum acceptable style score (0–100).
     #[arg(long)]
     pub style_min: Option<i32>,
+
+    /// Maximum acceptable readability grade level.
+    #[arg(long)]
+    pub max_grade: Option<f64>,
+
+    /// Maximum acceptable passive voice percentage (0–100).
+    #[arg(long)]
+    pub passive_max: Option<f64>,
 
     /// English dialect for spelling enforcement (en-us, en-gb, en-ca, en-au).
     #[arg(long)]
@@ -41,21 +56,25 @@ pub fn cmd_analyze(
     config_dialect: Option<Dialect>,
     max_input_bytes: Option<usize>,
 ) -> anyhow::Result<()> {
-    debug!(file = %args.file, checks = ?args.checks, "executing analyze command");
+    debug!(file = %args.file, checks = ?args.checks, exclude = ?args.exclude, "executing analyze command");
 
     let content = read_input_file(&args.file, max_input_bytes)?;
 
     let strip_md = args.file.extension() == Some("md");
     let style_min = args.style_min.or(config_style_min);
+    let max_grade = args.max_grade.or(config_max_grade);
+    let passive_max = args.passive_max.or(config_passive_max);
     let dialect = args.dialect.or(config_dialect);
 
-    let checks_ref = args.checks.as_deref();
+    // Resolve --checks / --exclude into the final check list.
+    let resolved_checks = resolve_checks(args.checks, args.exclude)?;
+    let checks_ref = resolved_checks.as_deref();
     let report = analysis::run_full_analysis(
         &content,
         strip_md,
         checks_ref,
-        config_max_grade,
-        config_passive_max,
+        max_grade,
+        passive_max,
         dialect,
     )
     .with_context(|| format!("failed to analyze {}", args.file))?;
@@ -207,4 +226,78 @@ pub fn cmd_analyze(
     }
 
     Ok(())
+}
+
+/// Resolve `--checks` and `--exclude` into a final check list.
+///
+/// - Both `None` → `None` (run all checks).
+/// - `--checks` provided → pass through as-is (core validates names).
+/// - `--exclude` provided → validate names, return `ALL_CHECKS` minus excluded.
+fn resolve_checks(
+    checks: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+) -> anyhow::Result<Option<Vec<String>>> {
+    match (checks, exclude) {
+        (Some(c), None) => Ok(Some(c)),
+        (None, Some(ex)) => {
+            let valid: HashSet<&str> = ALL_CHECKS.iter().copied().collect();
+            let unknown: Vec<&str> = ex
+                .iter()
+                .map(String::as_str)
+                .filter(|name| !valid.contains(name))
+                .collect();
+            if !unknown.is_empty() {
+                bail!(
+                    "unknown check(s): {}. Available: {}",
+                    unknown.join(", "),
+                    ALL_CHECKS.join(", "),
+                );
+            }
+            let excluded: HashSet<&str> = ex.iter().map(String::as_str).collect();
+            let remaining: Vec<String> = ALL_CHECKS
+                .iter()
+                .filter(|name| !excluded.contains(*name))
+                .map(|s| (*s).to_string())
+                .collect();
+            Ok(Some(remaining))
+        }
+        // Both None → all checks; both Some is prevented by clap conflicts_with.
+        _ => Ok(None),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_both_none_returns_none() {
+        let result = resolve_checks(None, None).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn resolve_checks_passes_through() {
+        let checks = vec!["readability".to_string(), "grammar".to_string()];
+        let result = resolve_checks(Some(checks.clone()), None).unwrap();
+        assert_eq!(result.unwrap(), checks);
+    }
+
+    #[test]
+    fn resolve_exclude_removes_named() {
+        let exclude = vec!["style".to_string(), "grammar".to_string()];
+        let result = resolve_checks(None, Some(exclude)).unwrap().unwrap();
+        assert!(!result.contains(&"style".to_string()));
+        assert!(!result.contains(&"grammar".to_string()));
+        assert!(result.contains(&"readability".to_string()));
+        assert_eq!(result.len(), ALL_CHECKS.len() - 2);
+    }
+
+    #[test]
+    fn resolve_exclude_unknown_errors() {
+        let exclude = vec!["bogus".to_string()];
+        let err = resolve_checks(None, Some(exclude)).unwrap_err();
+        assert!(err.to_string().contains("unknown check"));
+        assert!(err.to_string().contains("bogus"));
+    }
 }

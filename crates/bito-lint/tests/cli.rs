@@ -180,6 +180,104 @@ fn unknown_check_name_fails() {
 }
 
 // =============================================================================
+// Analyze: --exclude
+// =============================================================================
+
+#[test]
+fn exclude_skips_named_checks() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tmp.path(), "The cat sat on the mat. The dog ran fast.").unwrap();
+    // Exclude style — JSON output should omit the style field
+    cmd()
+        .args([
+            "analyze",
+            tmp.path().to_str().unwrap(),
+            "--exclude",
+            "style",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"style\"").not());
+}
+
+#[test]
+fn exclude_unknown_name_fails() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tmp.path(), "The cat sat on the mat.").unwrap();
+    cmd()
+        .args([
+            "analyze",
+            tmp.path().to_str().unwrap(),
+            "--exclude",
+            "bogus",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown check"));
+}
+
+#[test]
+fn checks_and_exclude_conflict() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tmp.path(), "The cat sat on the mat.").unwrap();
+    cmd()
+        .args([
+            "analyze",
+            tmp.path().to_str().unwrap(),
+            "--checks",
+            "readability",
+            "--exclude",
+            "style",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}
+
+// =============================================================================
+// Analyze: --max-grade and --passive-max
+// =============================================================================
+
+#[test]
+fn analyze_max_grade_accepted() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tmp.path(), "The cat sat on the mat. The dog ran fast.").unwrap();
+    cmd()
+        .args([
+            "analyze",
+            tmp.path().to_str().unwrap(),
+            "--checks",
+            "readability",
+            "--max-grade",
+            "12",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"readability\""));
+}
+
+#[test]
+fn analyze_passive_max_accepted() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tmp.path(), "The cat sat on the mat. The dog ran fast.").unwrap();
+    cmd()
+        .args([
+            "analyze",
+            tmp.path().to_str().unwrap(),
+            "--checks",
+            "grammar",
+            "--passive-max",
+            "50",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"grammar\""));
+}
+
+// =============================================================================
 // Error Cases
 // =============================================================================
 
@@ -208,6 +306,164 @@ fn invalid_flag_shows_error() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("error:"));
+}
+
+// =============================================================================
+// Lint Command
+// =============================================================================
+
+#[test]
+fn lint_no_rules_skips() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tmp.path(), "The cat sat on the mat.").unwrap();
+    cmd()
+        .args(["lint", tmp.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("no rules"));
+}
+
+#[test]
+fn lint_help_shows_usage() {
+    cmd()
+        .args(["lint", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Lint a file"));
+}
+
+#[test]
+fn lint_with_config_rules_runs_checks() {
+    let dir = tempfile::tempdir().unwrap();
+
+    // Create a config file with rules
+    let config_path = dir.path().join(".bito-lint.yaml");
+    std::fs::write(
+        &config_path,
+        r#"
+rules:
+  - paths: ["docs/**/*.md"]
+    checks:
+      readability:
+        max_grade: 20
+"#,
+    )
+    .unwrap();
+
+    // Create the file to lint (matching path)
+    let docs_dir = dir.path().join("docs");
+    std::fs::create_dir_all(&docs_dir).unwrap();
+    let file_path = docs_dir.join("guide.md");
+    std::fs::write(&file_path, "The cat sat on the mat. The dog ran fast.").unwrap();
+
+    cmd()
+        .args([
+            "-C",
+            dir.path().to_str().unwrap(),
+            "--config",
+            config_path.to_str().unwrap(),
+            "lint",
+            "docs/guide.md",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("readability"));
+}
+
+#[test]
+fn lint_no_match_skips_cleanly() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let config_path = dir.path().join(".bito-lint.yaml");
+    std::fs::write(
+        &config_path,
+        "rules:\n  - paths: [\"docs/**/*.md\"]\n    checks:\n      readability:\n        max_grade: 20\n",
+    )
+    .unwrap();
+
+    let file_path = dir.path().join("random.txt");
+    std::fs::write(&file_path, "Some text here for analysis.").unwrap();
+
+    cmd()
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "lint",
+            file_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("no rules match"));
+}
+
+#[test]
+fn lint_json_output_has_pass_field() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let config_path = dir.path().join(".bito-lint.yaml");
+    std::fs::write(
+        &config_path,
+        r#"
+rules:
+  - paths: ["**/*.md"]
+    checks:
+      readability:
+        max_grade: 20
+"#,
+    )
+    .unwrap();
+
+    let file_path = dir.path().join("test.md");
+    std::fs::write(&file_path, "The cat sat on the mat. The dog ran fast.").unwrap();
+
+    let output = cmd()
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "--json",
+            "lint",
+            file_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8_lossy(&output.get_output().stdout);
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout).expect("lint --json should output valid JSON");
+    assert!(json["pass"].as_bool().unwrap());
+    assert!(json["readability"].is_object());
+}
+
+#[test]
+fn lint_with_tokens_budget() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let config_path = dir.path().join(".bito-lint.yaml");
+    std::fs::write(
+        &config_path,
+        r#"
+rules:
+  - paths: ["**/*.md"]
+    checks:
+      tokens:
+        budget: 1000000
+"#,
+    )
+    .unwrap();
+
+    let file_path = dir.path().join("test.md");
+    std::fs::write(&file_path, "Short document.").unwrap();
+
+    cmd()
+        .args([
+            "--config",
+            config_path.to_str().unwrap(),
+            "lint",
+            file_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("tokens"));
 }
 
 // =============================================================================

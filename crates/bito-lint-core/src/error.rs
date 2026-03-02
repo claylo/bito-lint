@@ -54,6 +54,10 @@ pub enum AnalysisError {
         /// Configured maximum size in bytes.
         max: usize,
     },
+
+    /// A rule specifies conflicting configuration options.
+    #[error("conflicting rule config: {0}")]
+    ConflictingConfig(String),
 }
 
 /// Result type alias using [`AnalysisError`].
