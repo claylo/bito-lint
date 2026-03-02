@@ -28,6 +28,7 @@ pub mod analysis;
 pub mod completeness;
 pub mod config;
 pub mod dictionaries;
+pub mod directives;
 pub mod error;
 pub mod grammar;
 pub mod markdown;
