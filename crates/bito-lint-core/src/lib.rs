@@ -32,6 +32,7 @@ pub mod error;
 pub mod grammar;
 pub mod markdown;
 pub mod readability;
+pub mod rules;
 pub mod text;
 pub mod tokens;
 pub mod word_lists;
