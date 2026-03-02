@@ -86,6 +86,62 @@ pub fn split_paragraphs(text: &str) -> Vec<String> {
         .collect()
 }
 
+/// Map sentence index (0-based) to source line number (1-based).
+///
+/// Uses `split_sentences()` to get sentences, then locates each sentence's
+/// starting position in the original text to determine its line number.
+pub fn build_sentence_line_map(text: &str) -> Vec<usize> {
+    let sentences = split_sentences(text);
+    if sentences.is_empty() {
+        return Vec::new();
+    }
+
+    let mut map = Vec::with_capacity(sentences.len());
+    let mut search_start = 0;
+
+    for sentence in &sentences {
+        // Find the sentence's starting position, searching forward from the last match
+        let trimmed = sentence.trim();
+        if let Some(offset) = text[search_start..].find(trimmed) {
+            let abs_pos = search_start + offset;
+            let line = text[..abs_pos].chars().filter(|&c| c == '\n').count() + 1;
+            map.push(line);
+            // Advance past this sentence for the next search
+            search_start = abs_pos + trimmed.len();
+        } else {
+            // Fallback: if not found (shouldn't happen), use last known line
+            map.push(map.last().copied().unwrap_or(1));
+        }
+    }
+
+    map
+}
+
+/// Map paragraph index (0-based) to source line number (1-based).
+///
+/// Paragraphs are separated by blank lines, matching `split_paragraphs()`.
+/// Walks lines and records where each new paragraph starts.
+pub fn build_paragraph_line_map(text: &str) -> Vec<usize> {
+    if text.trim().is_empty() {
+        return Vec::new();
+    }
+
+    let mut map = Vec::new();
+    let mut in_paragraph = false;
+
+    for (i, line) in text.lines().enumerate() {
+        let line_num = i + 1;
+        if line.trim().is_empty() {
+            in_paragraph = false;
+        } else if !in_paragraph {
+            map.push(line_num);
+            in_paragraph = true;
+        }
+    }
+
+    map
+}
+
 const fn is_sentence_terminator(ch: char) -> bool {
     matches!(ch, '.' | '!' | '?')
 }
@@ -318,5 +374,60 @@ mod tests {
         let text = "First paragraph.\n\nSecond paragraph.\n\nThird.";
         let paras = split_paragraphs(text);
         assert_eq!(paras.len(), 3);
+    }
+
+    #[test]
+    fn sentence_line_map_basic() {
+        let text = "First sentence.\nSecond sentence.\nThird sentence.";
+        let map = build_sentence_line_map(text);
+        assert_eq!(map.len(), 3);
+        assert_eq!(map[0], 1);
+        assert_eq!(map[1], 2);
+        assert_eq!(map[2], 3);
+    }
+
+    #[test]
+    fn sentence_line_map_multiple_sentences_one_line() {
+        let text = "First. Second. Third.";
+        let map = build_sentence_line_map(text);
+        assert_eq!(map.len(), 3);
+        assert_eq!(map[0], 1);
+        assert_eq!(map[1], 1);
+        assert_eq!(map[2], 1);
+    }
+
+    #[test]
+    fn sentence_line_map_with_blank_lines() {
+        let text = "First sentence.\n\nSecond sentence on line 3.\n\nThird on line 5.";
+        let map = build_sentence_line_map(text);
+        assert_eq!(map.len(), 3);
+        assert_eq!(map[0], 1);
+        assert_eq!(map[1], 3);
+        assert_eq!(map[2], 5);
+    }
+
+    #[test]
+    fn paragraph_line_map_basic() {
+        let text = "Para one.\n\nPara two.\n\nPara three.";
+        let map = build_paragraph_line_map(text);
+        assert_eq!(map.len(), 3);
+        assert_eq!(map[0], 1);
+        assert_eq!(map[1], 3);
+        assert_eq!(map[2], 5);
+    }
+
+    #[test]
+    fn paragraph_line_map_multiline_paragraphs() {
+        let text = "First line.\nStill para one.\n\nPara two starts here.\nStill para two.";
+        let map = build_paragraph_line_map(text);
+        assert_eq!(map.len(), 2);
+        assert_eq!(map[0], 1);
+        assert_eq!(map[1], 4);
+    }
+
+    #[test]
+    fn empty_text_empty_maps() {
+        assert!(build_sentence_line_map("").is_empty());
+        assert!(build_paragraph_line_map("").is_empty());
     }
 }

@@ -100,18 +100,18 @@ fn discovers_config_in_parent_directory() {
 }
 
 #[test]
-fn dotfile_takes_precedence_over_regular_name() {
+fn regular_name_overrides_dotfile() {
     let tmp = TempDir::new().unwrap();
 
-    // Both configs exist — dotfile should win
+    // Both configs exist — regular file (higher precedence) should win
     fs::write(tmp.path().join(".bito-lint.toml"), r#"log_level = "debug""#).unwrap();
     fs::write(tmp.path().join("bito-lint.toml"), r#"log_level = "error""#).unwrap();
 
     let json = info_json(tmp.path());
 
     assert_eq!(
-        json["config"]["log_level"], "debug",
-        "dotfile value should win"
+        json["config"]["log_level"], "error",
+        "regular file should override dotfile"
     );
 }
 
@@ -182,17 +182,17 @@ fn closer_config_takes_precedence() {
 }
 
 #[test]
-fn toml_preferred_over_yaml_in_same_directory() {
+fn later_extension_overrides_earlier_in_same_directory() {
     let tmp = TempDir::new().unwrap();
 
-    // TOML is first in extension preference order
+    // Both dotfiles exist — YAML comes after TOML in merge order, so it wins
     fs::write(tmp.path().join(".bito-lint.toml"), r#"log_level = "debug""#).unwrap();
     fs::write(tmp.path().join(".bito-lint.yaml"), "log_level: error\n").unwrap();
 
     let json = info_json(tmp.path());
     assert_eq!(
-        json["config"]["log_level"], "debug",
-        "TOML should be preferred over YAML"
+        json["config"]["log_level"], "error",
+        "later extension (YAML) should override earlier (TOML) in merge"
     );
 }
 

@@ -1,5 +1,6 @@
 //! Error types for bito-lint-core.
 
+use camino::Utf8PathBuf;
 use thiserror::Error;
 
 /// Errors that can occur when working with configuration.
@@ -12,6 +13,19 @@ pub enum ConfigError {
     /// Configuration file not found after searching all locations.
     #[error("no configuration file found")]
     NotFound,
+
+    /// A custom entry references a file that cannot be read.
+    #[error("custom entry file not found: {path}: {source}")]
+    CustomEntryFile {
+        /// The resolved file path that could not be read.
+        path: Utf8PathBuf,
+        /// The underlying I/O error.
+        source: std::io::Error,
+    },
+
+    /// A custom entry has neither `instructions` nor `file`.
+    #[error("custom entry has neither 'instructions' nor 'file'")]
+    CustomEntryEmpty,
 }
 
 /// Result type alias using [`ConfigError`].

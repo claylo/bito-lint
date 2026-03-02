@@ -112,6 +112,9 @@ pub enum Commands {
     /// Check grammar and passive voice
     Grammar(commands::grammar::GrammarArgs),
 
+    /// Manage custom content entries
+    Custom(commands::custom::CustomArgs),
+
     /// Lint a file according to project rules
     Lint(commands::lint::LintArgs),
 
