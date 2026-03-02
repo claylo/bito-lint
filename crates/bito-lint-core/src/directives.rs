@@ -8,8 +8,15 @@
 //! Directives are parsed from the raw input before markdown stripping.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
 use regex::Regex;
+
+/// Pre-compiled directive regex.
+static DIRECTIVE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"<!--\s*bito-lint\s+(disable|enable|disable-next-line)\s+([\w,\s]+?)\s*-->")
+        .expect("directive regex should compile")
+});
 
 /// Map of check names to their suppressed line ranges (1-indexed, inclusive).
 ///
@@ -55,17 +62,13 @@ impl SuppressionMap {
 ///
 /// Call this on the original text BEFORE markdown stripping.
 pub fn parse_suppressions(input: &str) -> SuppressionMap {
-    let re = Regex::new(
-        r"<!--\s*bito-lint\s+(disable|enable|disable-next-line)\s+([\w,\s]+?)\s*-->"
-    ).expect("directive regex should compile");
-
     let mut map = SuppressionMap::default();
     let mut open: HashMap<String, usize> = HashMap::new();
 
     for (line_idx, line_text) in input.lines().enumerate() {
         let line_num = line_idx + 1;
 
-        for cap in re.captures_iter(line_text) {
+        for cap in DIRECTIVE_RE.captures_iter(line_text) {
             let action = &cap[1];
             let checks_str = &cap[2];
             let checks: Vec<String> = checks_str

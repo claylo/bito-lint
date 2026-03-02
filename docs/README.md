@@ -156,7 +156,7 @@ Equal specificity: the earlier rule in the array wins.
 
 ## Inline suppressions
 
-Suppress checks for specific regions of a file using HTML comments. These work with the `lint` command.
+Suppress checks for specific regions of a file using HTML comments. These work with the `lint` command. File-level suppression (unclosed `disable`) skips the check entirely. For `analyze`, fully-suppressed sub-checks are removed from the check list.
 
 ### Disable/enable block
 
