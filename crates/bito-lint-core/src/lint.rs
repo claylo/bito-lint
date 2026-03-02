@@ -68,10 +68,10 @@ pub fn run_lint(
         let report =
             analysis::run_full_analysis(content, strip_md, checks_ref, max_grade, passive_max, dialect)?;
         let style_min = ac.style_min.or(config.style_min_score);
-        if let (Some(min), Some(st)) = (style_min, &report.style) {
-            if st.style_score < min {
-                pass = false;
-            }
+        if let (Some(min), Some(st)) = (style_min, &report.style)
+            && st.style_score < min
+        {
+            pass = false;
         }
         Some(report)
     } else {

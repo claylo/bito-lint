@@ -117,14 +117,14 @@ pub struct GrammarRuleConfig {
 }
 
 /// Settings for the `completeness` check within a rule.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct CompletenessRuleConfig {
     /// Template name (required): "adr", "handoff", "design-doc", or custom.
     pub template: String,
 }
 
 /// Settings for the `tokens` check within a rule.
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct TokensRuleConfig {
     /// Maximum token budget. Omit for no limit.

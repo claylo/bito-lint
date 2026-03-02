@@ -41,7 +41,7 @@ pub struct ResolvedChecks {
 
 impl ResolvedChecks {
     /// Returns `true` if no checks are configured.
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.analyze.is_none()
             && self.readability.is_none()
             && self.grammar.is_none()
@@ -124,31 +124,31 @@ impl RuleSet {
             };
 
             if rule.checks.analyze.is_some()
-                && analyze_spec.map_or(true, |prev| spec > prev)
+                && analyze_spec.is_none_or(|prev| spec > prev)
             {
                 result.analyze = rule.checks.analyze.clone();
                 analyze_spec = Some(spec);
             }
             if rule.checks.readability.is_some()
-                && readability_spec.map_or(true, |prev| spec > prev)
+                && readability_spec.is_none_or(|prev| spec > prev)
             {
                 result.readability = rule.checks.readability.clone();
                 readability_spec = Some(spec);
             }
             if rule.checks.grammar.is_some()
-                && grammar_spec.map_or(true, |prev| spec > prev)
+                && grammar_spec.is_none_or(|prev| spec > prev)
             {
                 result.grammar = rule.checks.grammar.clone();
                 grammar_spec = Some(spec);
             }
             if rule.checks.completeness.is_some()
-                && completeness_spec.map_or(true, |prev| spec > prev)
+                && completeness_spec.is_none_or(|prev| spec > prev)
             {
                 result.completeness = rule.checks.completeness.clone();
                 completeness_spec = Some(spec);
             }
             if rule.checks.tokens.is_some()
-                && tokens_spec.map_or(true, |prev| spec > prev)
+                && tokens_spec.is_none_or(|prev| spec > prev)
             {
                 result.tokens = rule.checks.tokens.clone();
                 tokens_spec = Some(spec);
