@@ -309,6 +309,30 @@ fn invalid_flag_shows_error() {
 }
 
 // =============================================================================
+// Lint Command
+// =============================================================================
+
+#[test]
+fn lint_no_rules_skips() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tmp.path(), "The cat sat on the mat.").unwrap();
+    cmd()
+        .args(["lint", tmp.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("no rules"));
+}
+
+#[test]
+fn lint_help_shows_usage() {
+    cmd()
+        .args(["lint", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Lint a file"));
+}
+
+// =============================================================================
 // Chdir Flag
 // =============================================================================
 

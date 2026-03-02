@@ -112,6 +112,9 @@ pub enum Commands {
     /// Check grammar and passive voice
     Grammar(commands::grammar::GrammarArgs),
 
+    /// Lint a file according to project rules
+    Lint(commands::lint::LintArgs),
+
     /// Diagnose configuration and environment
     Doctor(commands::doctor::DoctorArgs),
     /// Show package information

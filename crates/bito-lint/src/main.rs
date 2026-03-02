@@ -104,6 +104,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Grammar(args) => {
             commands::grammar::cmd_grammar(args, cli.json, config.passive_max_percent, max_input)
         }
+        Commands::Lint(args) => commands::lint::cmd_lint(args, cli.json, &config, max_input),
         Commands::Doctor(args) => {
             commands::doctor::cmd_doctor(args, cli.json, &config, &config_sources, &cwd)
         }
