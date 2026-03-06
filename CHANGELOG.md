@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-03-06
+
+### Features
+
+- Add config discovery, region suppression filtering, and custom content entries (#v0.3) (#20) by @claylo in [#20](https://github.com/claylo/bito-lint/pull/20)
+
+### Documentation
+
+- Update sample configs and README for v0.2.0 (#19) by @claylo in [#19](https://github.com/claylo/bito-lint/pull/19)
+
+
+
+
+**Full Changelog**: [v0.2.0...v0.3.0](https://github.com/claylo/bito-lint/compare/v0.2.0...v0.3.0)
+
+
 ## [0.2.0] - 2026-03-02
 
 ### Features
