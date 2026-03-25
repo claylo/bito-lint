@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-03-25
+
+### Miscellaneous Tasks
+
+- Renaming to bito by @claylo
+- Bumped version too soon by @claylo
+
+
+
+
+**Full Changelog**: [v0.3.0...v0.4.0](https://github.com/claylo/bito-lint/compare/v0.3.0...v0.4.0)
+
+
 ## [0.3.0] - 2026-03-06
 
 ### Features
