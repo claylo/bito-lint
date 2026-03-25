@@ -6,16 +6,16 @@ resolver = "3"
 [workspace.package]
 edition = "2024"
 license = "MIT"
-version = "0.3.0"
+version = "0.4.0"
 # version we want to allow
 rust-version = "1.88.0"
 readme = "README.md"
 repository = "https://github.com/claylo/bito-lint"
 homepage = "https://github.com/claylo/bito-lint"
 documentation = "https://docs.rs/bito-lint"
-description = "Quality gate tooling for building-in-the-open artifacts"
-keywords = ["writing-quality", "readability", "documentation", "lint", "mcp"]
-categories = ["command-line-utilities", "development-tools", "text-processing"]
+description = "renamed to bito"
+keywords = []
+categories = []
 
 [workspace.lints.rust]
 # Use "deny" instead of "forbid" to allow benchmark harnesses to override

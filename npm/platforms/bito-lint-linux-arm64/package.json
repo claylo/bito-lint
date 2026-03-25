@@ -1,7 +1,7 @@
 {
   "name": "@claylo/bito-lint-linux-arm64",
   "version": "0.1.0",
-  "description": "Quality gate tooling for building-in-the-open artifacts (linux-arm64 binary)",
+  "description": "renamed to @claylo/bito-linux-arm64",
   "license": "MIT",
   "repository": {
     "type": "git",

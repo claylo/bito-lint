@@ -1,7 +1,7 @@
 {
   "name": "@claylo/bito-lint",
   "version": "0.1.0",
-  "description": "Quality gate tooling for building-in-the-open artifacts",
+  "description": "renamed to @claylo/bito",
   "license": "MIT",
   "repository": {
     "type": "git",

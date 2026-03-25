@@ -1,7 +1,7 @@
 {
   "name": "@claylo/bito-lint-darwin-x64",
   "version": "0.1.0",
-  "description": "Quality gate tooling for building-in-the-open artifacts (darwin-x64 binary)",
+  "description": "renamed to @claylo/bito-darwin-x64",
   "license": "MIT",
   "repository": {
     "type": "git",
